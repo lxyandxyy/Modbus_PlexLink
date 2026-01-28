@@ -228,28 +228,301 @@ GET /api/alarms
 ```json
 {
     "success": true,
-    "data": [
+    "alarms": [
         {
             "id": "alarm_001_1706356800000",
             "ruleId": "alarm_001",
             "ruleName": "温度过高告警",
+            "channelName": "Channel1",
             "tagName": "Temperature",
             "value": 85.5,
-            "threshold": 80,
-            "severity": "warning",
+            "priority": 2,
+            "state": 0,
             "message": "温度超过80°C警戒值",
-            "timestamp": "2026-01-27T12:00:00.000Z",
+            "activeTime": "2026-01-27T12:00:00.000Z",
             "acknowledged": false
         }
-    ]
+    ],
+    "count": 1
 }
 ```
 
 #### 确认告警
 
 ```http
-POST /api/alarms/{alarmId}/acknowledge
+POST /api/alarms/{alarmId}/ack
 ```
+
+**响应示例：**
+
+```json
+{
+    "success": true,
+    "message": "Alarm acknowledged: alarm_001_1706356800000"
+}
+```
+
+#### 清除告警
+
+```http
+POST /api/alarms/{alarmId}/clear
+```
+
+**响应示例：**
+
+```json
+{
+    "success": true,
+    "message": "Alarm cleared: alarm_001_1706356800000"
+}
+```
+
+#### 获取告警历史
+
+```http
+GET /api/alarms/history?start=2026-01-01T00:00:00&end=2026-01-02T00:00:00
+```
+
+**查询参数：**
+- `start` (可选): 开始时间，ISO 8601格式，默认最近7天
+- `end` (可选): 结束时间，ISO 8601格式，默认当前时间
+
+**响应示例：**
+
+```json
+{
+    "success": true,
+    "history": [
+        {
+            "id": "alarm_001_1706356800000",
+            "ruleId": "alarm_001",
+            "ruleName": "温度过高告警",
+            "channelName": "Channel1",
+            "tagName": "Temperature",
+            "value": 85.5,
+            "message": "温度超过80°C警戒值",
+            "activeTime": "2026-01-27T12:00:00.000Z",
+            "acknowledgedTime": "2026-01-27T12:05:00.000Z",
+            "clearedTime": "2026-01-27T12:10:00.000Z",
+            "acknowledgedBy": "operator"
+        }
+    ],
+    "count": 1,
+    "startTime": "2026-01-01T00:00:00.000Z",
+    "endTime": "2026-01-02T00:00:00.000Z"
+}
+```
+
+---
+
+### 告警规则管理 | Alarm Rule Management
+
+#### 获取所有告警规则
+
+```http
+GET /api/alarm-rules
+```
+
+**响应示例：**
+
+```json
+{
+    "success": true,
+    "rules": [
+        {
+            "id": "alarm_001",
+            "name": "温度过高告警",
+            "enabled": true,
+            "channelName": "Channel1",
+            "tagName": "Temperature",
+            "type": 0,
+            "priority": 2,
+            "highLimit": 80.0,
+            "lowLimit": 0.0,
+            "highHighLimit": 100.0,
+            "lowLowLimit": -10.0,
+            "deadband": 1.0,
+            "delaySeconds": 5,
+            "message": "温度超过80°C警戒值",
+            "recordingConfig": {
+                "enabled": true,
+                "preTriggerSeconds": 60.0,
+                "postTriggerSeconds": 30.0,
+                "sampleIntervalMs": 100,
+                "recordTags": ["Temperature", "Pressure"],
+                "autoExportCsv": true,
+                "keepInMemory": true
+            }
+        }
+    ],
+    "count": 1
+}
+```
+
+#### 获取指定告警规则
+
+```http
+GET /api/alarm-rules/{ruleId}
+```
+
+#### 添加告警规则
+
+```http
+POST /api/alarm-rules
+Content-Type: application/json
+
+{
+    "name": "温度过高告警",
+    "enabled": true,
+    "channelName": "Channel1",
+    "tagName": "Temperature",
+    "type": 0,
+    "priority": 2,
+    "highLimit": 80.0,
+    "delaySeconds": 5,
+    "message": "温度超过80°C警戒值"
+}
+```
+
+**响应示例：**
+
+```json
+{
+    "success": true,
+    "ruleId": "alarm_001",
+    "message": "Alarm rule added: 温度过高告警"
+}
+```
+
+#### 更新告警规则
+
+```http
+PUT /api/alarm-rules/{ruleId}
+Content-Type: application/json
+
+{
+    "name": "温度过高告警（更新）",
+    "highLimit": 85.0
+}
+```
+
+#### 删除告警规则
+
+```http
+DELETE /api/alarm-rules/{ruleId}
+```
+
+#### 启用/禁用告警规则
+
+```http
+POST /api/alarm-rules/{ruleId}/enable
+Content-Type: application/json
+
+{
+    "enabled": true
+}
+```
+
+---
+
+### 录波管理 | Recording Management
+
+#### 获取录波数据列表
+
+```http
+GET /api/recording/data
+```
+
+**响应示例：**
+
+```json
+{
+    "success": true,
+    "recordings": [
+        {
+            "alarmEventId": "alarm_001_1706356800000",
+            "alarmRuleName": "温度过高告警",
+            "channelName": "Channel1",
+            "tagName": "Temperature",
+            "startTime": "2026-01-27T12:00:00.000Z",
+            "endTime": "2026-01-27T12:01:30.000Z",
+            "csvFilePath": "/recordings/alarm_001_1706356800000.csv",
+            "recordedTags": ["Temperature", "Pressure"],
+            "totalDataPoints": 900,
+            "isComplete": true,
+            "hasData": true
+        }
+    ],
+    "count": 1
+}
+```
+
+#### 获取录波回放数据
+
+```http
+POST /api/recording/playback
+Content-Type: application/json
+
+{
+    "alarmEventId": "alarm_001_1706356800000"
+}
+```
+
+**响应示例：**
+
+```json
+{
+    "success": true,
+    "alarmEventId": "alarm_001_1706356800000",
+    "startTime": "2026-01-27T12:00:00.000Z",
+    "endTime": "2026-01-27T12:01:30.000Z",
+    "csvFilePath": "/recordings/alarm_001_1706356800000.csv",
+    "recordedTags": ["Temperature", "Pressure"],
+    "totalDataPoints": 900,
+    "isComplete": true,
+    "data": [
+        {
+            "timestamp": 1706356800000,
+            "values": {
+                "Temperature": 85.5,
+                "Pressure": 1.2
+            }
+        },
+        {
+            "timestamp": 1706356800100,
+            "values": {
+                "Temperature": 85.6,
+                "Pressure": 1.21
+            }
+        }
+    ]
+}
+```
+
+#### 导出录波数据
+
+```http
+POST /api/recording/export
+Content-Type: application/json
+
+{
+    "alarmEventId": "alarm_001_1706356800000",
+    "format": "csv",
+    "filename": "recording_export.csv"
+}
+```
+
+**响应示例：**
+
+```json
+{
+    "success": true,
+    "filename": "recording_export.csv",
+    "message": "Recording exported to recording_export.csv"
+}
+```
+
+**注意：** 独立录波功能（非告警触发的录波）在无头模式下暂未实现，建议使用告警自动录波功能。
 
 ---
 

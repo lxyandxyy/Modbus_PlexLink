@@ -46,7 +46,6 @@
 - [快速开始](#-快速开始)
 - [使用指南](#-使用指南)
 - [API文档](#-api文档)
-- [配置说明](#-配置说明)
 - [后期计划与展望](#-后期计划与展望)
 - [贡献指南](#-贡献指南)
 - [许可证](#-许可证)
@@ -487,135 +486,7 @@ cmake --build . --config Release
 }
 ```
 
----
 
-## ⚙ 配置说明
-
-### 应用设置 (app_settings.json)
-
-应用级别的配置，适用于GUI和服务模式：
-
-```json
-{
-  "api": {
-    "enabled": true,
-    "httpPort": 8080,
-    "wsPort": 8081
-  },
-  "auth": {
-    "enabled": false,
-    "username": "",
-    "password": ""
-  },
-  "startup": {
-    "autoStartChannels": false,
-    "minimizeToTray": true
-  },
-  "files": {
-    "channelConfig": "config.json",
-    "alarmConfig": "alarm_config.json"
-  }
-}
-```
-
-**配置说明**:
-- `api.enabled`: 是否启用API服务器
-- `api.httpPort`: HTTP REST API端口（默认8080）
-- `api.wsPort`: WebSocket端口（默认8081）
-- `auth.enabled`: 是否启用API认证
-- `auth.username/password`: API认证凭据
-- `startup.autoStartChannels`: 启动时是否自动启动所有通道
-- `startup.minimizeToTray`: GUI模式是否最小化到系统托盘
-- `files.channelConfig`: 默认通道配置文件路径
-- `files.alarmConfig`: 默认告警配置文件路径
-
-### 通道配置文件结构 (config.json)
-
-```json
-{
-  "version": "1.1.0",
-  "channels": [
-    {
-      "name": "Channel1",
-      "enabled": true,
-      "description": "主采集通道",
-      "collectors": [
-        {
-          "name": "Collector1",
-          "type": "ModbusTCP",
-          "host": "192.168.1.100",
-          "port": 502,
-          "unitId": 1,
-          "pollInterval": 1000,
-          "timeout": 3000,
-          "mappings": [
-            {
-              "tagName": "Temperature",
-              "registerType": "HoldingRegister",
-              "address": 0,
-              "dataType": "Float32",
-              "byteOrder": "CDAB",
-              "scale": 0.1,
-              "offset": 0,
-              "unit": "°C"
-            }
-          ]
-        }
-      ],
-      "servers": [
-        {
-          "name": "Server1",
-          "type": "ModbusTCP",
-          "listenAddress": "0.0.0.0",
-          "listenPort": 503,
-          "virtualDevices": [
-            {
-              "virtualUnitId": 1,
-              "name": "VirtualDevice1",
-              "mappings": [
-                {
-                  "sourceTagName": "Temperature",
-                  "registerType": "HoldingRegister",
-                  "address": 100,
-                  "dataType": "UInt16",
-                  "scale": 10
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    }
-  ]
-}
-```
-
-### 数据类型映射
-
-| 数据类型 | 寄存器数 | 说明 |
-|----------|----------|------|
-| UInt16 | 1 | 无符号16位整数 |
-| Int16 | 1 | 有符号16位整数 |
-| UInt32 | 2 | 无符号32位整数 |
-| Int32 | 2 | 有符号32位整数 |
-| Float32 | 2 | 32位浮点数 |
-| UInt64 | 4 | 无符号64位整数 |
-| Int64 | 4 | 有符号64位整数 |
-| Float64 | 4 | 64位浮点数 |
-| Bool | 1位 | 布尔值（线圈） |
-
-### 字节序说明
-
-| 字节序 | 说明 | 适用场景 |
-|--------|------|----------|
-| AB | 大端序（2字节） | 标准Modbus |
-| BA | 小端序（2字节） | 部分设备 |
-| ABCD | 大端序（4字节） | 标准32位 |
-| DCBA | 小端序（4字节） | Intel设备 |
-| CDAB | 中端大序（4字节） | 西门子PLC |
-| BADC | 中端小序（4字节） | 部分仪表 |
-
----
 
 ## 🎉 V1.1.0 新特性
 
@@ -710,31 +581,17 @@ cmake --build . --config Release
 - [ ] **智能制造**：MES/ERP集成方案
 - [ ] **楼宇自控**：BACnet协议支持
 
-### 技术路线图
-
-```
-2026 Q1      2026 Q2      2026 Q3      2026 Q4      2027
-   │            │            │            │            │
-   ▼            ▼            ▼            ▼            ▼
-┌─────┐    ┌─────┐    ┌─────┐    ┌─────┐    ┌─────┐
-│v1.2 │    │v1.3 │    │v1.4 │    │v1.5 │    │v2.0 │
-│     │    │     │    │     │    │     │    │     │
-│RTU  │    │OPC  │    │集群 │    │AI   │    │微服 │
-│TCP  │    │UA   │    │部署 │    │检测 │    │务   │
-│     │    │MQTT │    │     │    │     │    │     │
-│数据 │    │     │    │Web  │    │     │    │插件 │
-│持久 │    │脚本 │    │界面 │    │     │    │系统 │
-└─────┘    └─────┘    └─────┘    └─────┘    └─────┘
-```
 
 ### 参与贡献
 
-我们欢迎社区贡献！您可以通过以下方式参与：
+欢迎联系我贡献！您可以通过以下方式参与：
 
 1. **🐛 提交Issue**：报告Bug或提出功能建议
 2. **🔧 Pull Request**：提交代码改进
 3. **📝 文档完善**：改进文档和示例
 4. **📦 设备适配**：贡献设备配置模板
+
+![联系方式](docs/images/微信.png)
 
 详细的贡献指南请参阅 [CONTRIBUTING.md](CONTRIBUTING.md)。
 

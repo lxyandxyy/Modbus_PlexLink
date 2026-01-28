@@ -1127,6 +1127,7 @@ void MainWindow::createCentralWidget() {
 
     // 右下：报文与日志面板
     m_messageLogPanel = new MessageLogPanel(this);
+    m_messageLogPanel->setMinimumHeight(260);  // 设置最小高度为260px
     m_rightSplitter->addWidget(m_messageLogPanel);
 
     // 设置右侧上下分割比例 (60% : 40%)
@@ -1140,6 +1141,12 @@ void MainWindow::createCentralWidget() {
     m_mainSplitter->setStretchFactor(1, 70);
 
     setCentralWidget(m_mainSplitter);
+    
+    // 设置右侧splitter的初始大小，使右下区域初始高度为260px
+    // 假设窗口高度约为800px，右侧区域高度约为600px，则右上约为340px，右下为260px
+    QList<int> rightSizes;
+    rightSizes << 340 << 260;  // 右上340px，右下260px
+    m_rightSplitter->setSizes(rightSizes);
 
     // 应用现代化主题
     applyModernTheme();

@@ -46,7 +46,7 @@
 - [快速开始](#-快速开始)
 - [使用指南](#-使用指南)
 - [API文档](#-api文档)
-- [后期计划与展望](#-后期计划与展望)
+- [后期计划](#-后期计划)
 - [贡献指南](#-贡献指南)
 - [许可证](#-许可证)
 
@@ -386,105 +386,26 @@ cmake --build . --config Release
 
 ## 🔌 API文档
 
-### REST API端点
+Modbus PlexLink 提供完整的 HTTP REST API 和 WebSocket 实时推送功能。
 
-#### 通道管理
+### 主要端点
 
-| 方法 | 路径 | 描述 |
-|------|------|------|
-| GET | `/api/channels` | 获取所有通道 |
-| GET | `/api/channels/{name}` | 获取指定通道 |
-| POST | `/api/channels` | 创建通道 |
-| PUT | `/api/channels/{name}` | 更新通道 |
-| DELETE | `/api/channels/{name}` | 删除通道 |
-| POST | `/api/channels/{name}/start` | 启动通道 |
-| POST | `/api/channels/{name}/stop` | 停止通道 |
+- **通道管理**: `GET/POST/PUT/DELETE /api/channels`
+- **数据操作**: `GET/PUT /api/channels/{name}/data`
+- **告警管理**: `GET /api/alarms`, `POST /api/alarms/{id}/acknowledge`
+- **系统信息**: `GET /api/system`, `GET /api/statistics`
 
-#### 数据操作
-
-| 方法 | 路径 | 描述 |
-|------|------|------|
-| GET | `/api/channels/{name}/data` | 获取通道所有数据 |
-| GET | `/api/channels/{name}/data/{tag}` | 获取指定数据点 |
-| PUT | `/api/channels/{name}/data/{tag}` | 写入数据点 |
-
-#### 告警管理
-
-| 方法 | 路径 | 描述 |
-|------|------|------|
-| GET | `/api/alarms` | 获取活动告警 |
-| POST | `/api/alarms/{id}/acknowledge` | 确认告警 |
-
-#### 系统
-
-| 方法 | 路径 | 描述 |
-|------|------|------|
-| GET | `/api/system` | 获取系统信息 |
-| GET | `/api/statistics` | 获取统计信息 |
-| GET | `/api/config` | 获取当前配置 |
-| POST | `/api/config/save` | 保存配置 |
-
-### WebSocket API
+### WebSocket 实时推送
 
 连接地址: `ws://host:8081`
 
-#### 订阅消息
+支持订阅：
+- **数据订阅**: 实时数据更新推送
+- **告警通知**: 告警事件实时推送
+- **通道状态**: 通道状态变化推送
+- **Modbus报文**: 实时Modbus通信报文推送
 
-```json
-{
-  "type": "subscribe",
-  "data": {
-    "topics": ["data.Channel1", "alarms"]
-  }
-}
-```
-
-#### 数据推送
-
-```json
-{
-  "type": "data",
-  "channel": "Channel1",
-  "data": {
-    "Tag1": { "value": 123.45, "quality": "Good", "timestamp": "..." },
-    "Tag2": { "value": 67.89, "quality": "Good", "timestamp": "..." }
-  }
-}
-```
-
-#### 通道状态推送
-
-```json
-{
-  "type": "channel",
-  "data": {
-    "channel": "Channel1",
-    "action": "stateChanged",
-    "state": 2,
-    "stateString": "Running",
-    "running": true
-  }
-}
-```
-
-#### Modbus报文推送
-
-```json
-{
-  "type": "message",
-  "data": {
-    "channel": "Channel1",
-    "source": "ModbusTCP",
-    "direction": "TX",
-    "device": "1:192.168.1.100:502",
-    "function": "读保持寄存器(FC03)",
-    "address": "0~20",
-    "data": "0000 0000 ...",
-    "success": true,
-    "timestamp": "2026-01-15T10:30:00"
-  }
-}
-```
+详细的API文档请参阅 [API文档](docs/API.md)
 
 
 
@@ -515,76 +436,22 @@ cmake --build . --config Release
 
 ---
 
-## 🔮 后期计划与展望
+## 🔮 后期计划
 
-### 短期计划 (v1.2.0 - Q1 2026)
+### 短期计划 (v1.2.0)
+- Modbus RTU over TCP、数据持久化、采集器模板、配置向导
 
-#### 功能增强
+### 中期计划 (v1.3.0)
+- OPC UA客户端、MQTT发布、脚本引擎、虚拟点计算
 
-- [ ] **Modbus RTU over TCP**：支持串口服务器透传模式
-- [ ] **数据持久化**：本地SQLite数据库存储历史数据
-- [ ] **断点续采**：设备重连后自动补采数据
-- [ ] **采集器模板**：预置常见设备（电表、PLC）的配置模板
+### 长期展望 (v2.0+)
+- 微服务架构、容器化支持、插件系统、Web管理界面
 
-#### 性能优化
-
-- [ ] **采集调度优化**：智能调度多采集器，减少通信冲突
-- [ ] **内存池管理**：减少频繁内存分配开销
-- [ ] **数据压缩**：WebSocket数据推送支持压缩
-
-#### 用户体验
-
-- [ ] **配置向导**：引导式设备配置流程
-- [ ] **在线帮助**：内置帮助文档和工具提示
-- [ ] **主题切换**：支持亮色/暗色主题
-
-### 中期计划 (v1.3.0 - Q2 2026)
-
-#### 协议扩展
-
-- [ ] **OPC UA客户端**：支持OPC UA协议设备采集
-- [ ] **MQTT发布**：将数据发布到MQTT Broker
-- [ ] **HTTP推送**：支持将数据推送到REST API端点
-- [ ] **Modbus RTU服务器**：支持作为RTU从站响应
-
-#### 高级功能
-
-- [ ] **脚本引擎**：支持Lua/JavaScript脚本进行数据处理
-- [ ] **虚拟点计算**：支持计算型虚拟数据点（求和、平均等）
-- [ ] **数据归档**：按时间段归档历史数据
-- [ ] **报表导出**：定时生成数据报表（PDF/Excel）
-
-#### 集群部署
-
-- [ ] **主从热备**：支持主从节点自动切换
-- [ ] **负载均衡**：多网关负载均衡部署
-- [ ] **配置同步**：集群配置自动同步
-
-### 长期展望 (v2.0.0 - 2027)
-
-#### 架构升级
-
-- [ ] **微服务架构**：核心功能模块化，支持独立部署
-- [ ] **容器化支持**：提供Docker镜像和Kubernetes部署方案
-- [ ] **边缘AI**：集成轻量级机器学习模型进行异常检测
-
-#### 生态建设
-
-- [ ] **插件系统**：支持第三方协议适配器插件
-- [ ] **设备库**：社区贡献的设备配置库
-- [ ] **Web管理界面**：基于Vue/React的Web配置界面
-- [ ] **移动端App**：iOS/Android监控应用
-
-#### 行业解决方案
-
-- [ ] **能源管理**：电力、水务、燃气行业专用版
-- [ ] **智能制造**：MES/ERP集成方案
-- [ ] **楼宇自控**：BACnet协议支持
 
 
 ### 参与贡献
 
-欢迎联系我贡献！您可以通过以下方式参与：
+欢迎贡献！您可以通过以下方式参与：
 
 1. **🐛 提交Issue**：报告Bug或提出功能建议
 2. **🔧 Pull Request**：提交代码改进

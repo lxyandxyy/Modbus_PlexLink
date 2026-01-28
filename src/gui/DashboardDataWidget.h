@@ -112,6 +112,7 @@ private:
     QLabel* m_channelStatusLabel;  // 通道状态标签（运行/离线）
     QScrollArea* m_scrollArea;
     QWidget* m_contentWidget;
+    QWidget* m_gridContainer;      // 网格布局容器（用于居中）
     QGridLayout* m_gridLayout;
     QLabel* m_emptyLabel;
 

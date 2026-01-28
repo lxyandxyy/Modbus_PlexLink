@@ -327,6 +327,11 @@ DashboardDataWidget::DashboardDataWidget(QWidget *parent)
     , m_headerWidget(nullptr)
     , m_channelNameLabel(nullptr)
     , m_channelStatusLabel(nullptr)
+    , m_scrollArea(nullptr)
+    , m_contentWidget(nullptr)
+    , m_gridContainer(nullptr)
+    , m_gridLayout(nullptr)
+    , m_emptyLabel(nullptr)
     , m_channelOnline(false)
 {
     setupUi();
@@ -395,18 +400,36 @@ void DashboardDataWidget::setupUi() {
     m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
-    // 内容容器
+    // 内容容器 - 使用包装布局实现居中
     m_contentWidget = new QWidget();
-    m_gridLayout = new QGridLayout(m_contentWidget);
-    m_gridLayout->setContentsMargins(16, 16, 16, 16);
+    QVBoxLayout* contentLayout = new QVBoxLayout(m_contentWidget);
+    contentLayout->setContentsMargins(0, 0, 0, 0);
+    contentLayout->setSpacing(0);
+    
+    // 创建一个水平布局用于居中
+    QHBoxLayout* centerLayout = new QHBoxLayout();
+    centerLayout->setContentsMargins(16, 16, 16, 16);
+    centerLayout->setSpacing(0);
+    centerLayout->addStretch();
+    
+    // 网格布局（卡片容器）
+    m_gridContainer = new QWidget(m_contentWidget);
+    m_gridLayout = new QGridLayout(m_gridContainer);
+    m_gridLayout->setContentsMargins(0, 0, 0, 0);
     m_gridLayout->setSpacing(12);
     m_gridLayout->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+    
+    centerLayout->addWidget(m_gridContainer);
+    centerLayout->addStretch();
+    
+    contentLayout->addLayout(centerLayout);
+    contentLayout->addStretch();
 
     m_scrollArea->setWidget(m_contentWidget);
     mainLayout->addWidget(m_scrollArea);
 
     // 空状态标签
-    m_emptyLabel = new QLabel(tr("🔍 暂无数据\n\n请选择一个运行中的通道"), this);
+    m_emptyLabel = new QLabel(tr("🔍 暂无数据\n\n请选择一个运行中的通道"), m_gridContainer);
     m_emptyLabel->setAlignment(Qt::AlignCenter);
     m_emptyLabel->setStyleSheet(R"(
         QLabel {
@@ -592,7 +615,7 @@ void DashboardDataWidget::addOrUpdateRemoteCard(const QString& tagName, const QJ
     } else {
         // 创建新卡片
         DataPoint emptyPoint;
-        DataPointCard* card = new DataPointCard(tagName, emptyPoint, m_contentWidget);
+        DataPointCard* card = new DataPointCard(tagName, emptyPoint, m_gridContainer);
         card->setRemoteMode(true);
         card->updateData(pointJson);
         m_cards[tagName] = card;
@@ -658,7 +681,7 @@ void DashboardDataWidget::addOrUpdateCard(const QString& tagName, const DataPoin
         m_cards[tagName]->updateData(point);
     } else {
         // 创建新卡片
-        DataPointCard* card = new DataPointCard(tagName, point, m_contentWidget);
+        DataPointCard* card = new DataPointCard(tagName, point, m_gridContainer);
         m_cards[tagName] = card;
 
         // 计算网格位置 (每行4个卡片)

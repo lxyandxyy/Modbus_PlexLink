@@ -1,0 +1,312 @@
+name: Build
+
+on:
+  push:
+    branches: [ main, master, develop ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+env:
+  QT_VERSION: '6.5.3'
+  BUILD_TYPE: Release
+
+jobs:
+  # ============================================================================
+  # Windows Build
+  # ============================================================================
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: 🔧 Install Qt
+      uses: jurplel/install-qt-action@v3
+      with:
+        version: ${{ env.QT_VERSION }}
+        host: 'windows'
+        target: 'desktop'
+        arch: 'win64_mingw'
+        modules: 'qtwebsockets'
+        cache: true
+    
+    - name: 📦 Setup MinGW
+      uses: egor-tensin/setup-mingw@v2
+      with:
+        platform: x64
+        version: 12.2.0
+    
+    - name: 🛠️ Configure CMake
+      run: |
+        cmake -B build -G "MinGW Makefiles" `
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
+          -DCMAKE_PREFIX_PATH="${{ env.Qt6_DIR }}" `
+          -DBUILD_TESTING=OFF
+    
+    - name: 🔨 Build
+      shell: pwsh
+      run: cmake --build build --config ${{ env.BUILD_TYPE }} -j4
+    
+    - name: 📦 Deploy Qt DLLs (GUI)
+      shell: pwsh
+      run: |
+        $QtDir = "${{ env.Qt6_DIR }}"
+        $QtBinDir = Join-Path $QtDir "bin"
+        $QtPluginsDir = Join-Path $QtDir "plugins"
+        $QtPlatformsDir = Join-Path $QtPluginsDir "platforms"
+        $windeployqt = Join-Path $QtBinDir "windeployqt.exe"
+        
+        if (-not (Test-Path $windeployqt)) {
+          Write-Error "windeployqt.exe not found at $windeployqt"
+          exit 1
+        }
+        
+        Write-Host "=== Deploying Qt DLLs for GUI application ==="
+        Write-Host "Qt Directory: $QtDir"
+        Write-Host "Qt Plugins Directory: $QtPluginsDir"
+        
+        # Verify plugins directory exists
+        if (-not (Test-Path $QtPluginsDir)) {
+          Write-Error "Qt plugins directory not found: $QtPluginsDir"
+          exit 1
+        }
+        
+        # Verify platforms directory exists
+        if (-not (Test-Path $QtPlatformsDir)) {
+          Write-Error "Qt platforms directory not found: $QtPlatformsDir"
+          exit 1
+        }
+        
+        # List platform plugins
+        Write-Host "Platform plugins found:"
+        Get-ChildItem $QtPlatformsDir -Filter "*.dll" | ForEach-Object {
+          Write-Host "  - $($_.Name)"
+        }
+        
+        # Set environment variables for windeployqt
+        $env:QT_PLUGIN_PATH = $QtPluginsDir
+        $env:QT_DIR = $QtDir
+        $env:QTDIR = $QtDir
+        $env:PATH = "$QtBinDir;$env:PATH"
+        
+        # Change to build directory and run windeployqt
+        $deploymentSuccess = $false
+        Push-Location build
+        try {
+          # Use --dir to explicitly specify deployment directory
+          Write-Host "Running windeployqt..."
+          $windeployqtOutput = & $windeployqt --release --compiler-runtime --no-translations --no-system-d3d-compiler --no-opengl-sw --dir . Modbus_PlexLink.exe 2>&1
+          $windeployqtSuccess = ($LASTEXITCODE -eq 0)
+          
+          if ($windeployqtSuccess) {
+            Write-Host "✓ Qt DLLs deployed successfully by windeployqt"
+            $deploymentSuccess = $true
+          } else {
+            Write-Warning "windeployqt exited with code $LASTEXITCODE, attempting manual deployment..."
+            
+            # Manual fallback: copy Qt DLLs
+            $QtDlls = @(
+              "Qt6Core.dll",
+              "Qt6Gui.dll",
+              "Qt6Widgets.dll",
+              "Qt6Network.dll",
+              "Qt6Concurrent.dll",
+              "Qt6WebSockets.dll",
+              "Qt6PrintSupport.dll"
+            )
+            
+            $dllsCopied = 0
+            foreach ($dll in $QtDlls) {
+              $srcDll = Join-Path $QtBinDir $dll
+              if (Test-Path $srcDll) {
+                Copy-Item $srcDll (Get-Location) -Force -ErrorAction SilentlyContinue
+                if (Test-Path $dll) {
+                  $dllsCopied++
+                  Write-Host "  ✓ Copied $dll"
+                }
+              }
+            }
+            
+            # Copy platform plugin
+            $BuildPlatformsDir = Join-Path (Get-Location) "platforms"
+            if (-not (Test-Path $BuildPlatformsDir)) {
+              New-Item -ItemType Directory -Path $BuildPlatformsDir | Out-Null
+            }
+            
+            $PlatformDll = Join-Path $QtPlatformsDir "qwindows.dll"
+            if (Test-Path $PlatformDll) {
+              Copy-Item $PlatformDll $BuildPlatformsDir -Force
+              Write-Host "  ✓ Copied qwindows.dll to platforms/"
+              $dllsCopied++
+            } else {
+              Write-Warning "qwindows.dll not found at $PlatformDll"
+            }
+            
+            if ($dllsCopied -gt 0) {
+              Write-Host "✓ Manually deployed $dllsCopied Qt components"
+              $deploymentSuccess = $true
+            } else {
+              Write-Error "Failed to manually deploy Qt DLLs"
+            }
+          }
+        } catch {
+          Write-Error "Exception during Qt DLL deployment: $_"
+          $deploymentSuccess = $false
+        } finally {
+          Pop-Location
+        }
+        
+        # Check deployment result - if successful, ensure we exit with code 0
+        if ($deploymentSuccess) {
+          Write-Host "✓ Qt DLL deployment completed successfully"
+          # Explicitly exit with success code to override any previous failures
+          exit 0
+        } else {
+          Write-Error "Qt DLL deployment failed"
+          exit 1
+        }
+    
+    - name: 📦 Deploy Qt DLLs (Service)
+      shell: pwsh
+      run: |
+        $QtDir = "${{ env.Qt6_DIR }}"
+        $QtBinDir = Join-Path $QtDir "bin"
+        $windeployqt = Join-Path $QtBinDir "windeployqt.exe"
+        
+        if (-not (Test-Path $windeployqt)) {
+          Write-Error "windeployqt.exe not found at $windeployqt"
+          exit 1
+        }
+        
+        Write-Host "=== Deploying Qt DLLs for Service application ==="
+        
+        # Set environment variables for windeployqt
+        $env:QT_PLUGIN_PATH = Join-Path $QtDir "plugins"
+        $env:QT_DIR = $QtDir
+        $env:QTDIR = $QtDir
+        $env:PATH = "$QtBinDir;$env:PATH"
+        
+        # Change to build directory and run windeployqt
+        Push-Location build
+        try {
+          # Service doesn't need GUI plugins, but still needs core DLLs
+          & $windeployqt --release --compiler-runtime --no-translations --no-system-d3d-compiler --no-opengl-sw --no-quick-import --dir . Modbus_PlexLink_Service.exe
+          
+          if ($LASTEXITCODE -ne 0) {
+            Write-Warning "windeployqt failed for Service, but continuing (Service may not need all plugins)"
+          } else {
+            Write-Host "✓ Qt DLLs deployed for Service application"
+          }
+        } finally {
+          Pop-Location
+        }
+    
+    - name: 📦 Package
+      shell: pwsh
+      run: |
+        New-Item -ItemType Directory -Force -Path "release"
+        Copy-Item "build/Modbus_PlexLink.exe" "release/"
+        Copy-Item "build/Modbus_PlexLink_Service.exe" "release/"
+        Copy-Item "build/*.dll" "release/" -ErrorAction SilentlyContinue
+        # Copy Qt plugins directory if exists
+        if (Test-Path "build/platforms") {
+          Copy-Item -Recurse "build/platforms" "release/"
+        }
+        Copy-Item "README.md" "release/"
+        Copy-Item "LICENSE" "release/"
+    
+    - name: 📤 Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: Modbus_PlexLink-Windows-x64
+        path: release/
+        retention-days: 30
+
+  # ============================================================================
+  # Linux Build
+  # ============================================================================
+  build-linux:
+    runs-on: ubuntu-22.04
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: 📦 Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          libmodbus-dev \
+          libgl1-mesa-dev \
+          libxkbcommon-x11-0 \
+          libxcb-cursor0
+    
+    - name: 🔧 Install Qt
+      uses: jurplel/install-qt-action@v3
+      with:
+        version: ${{ env.QT_VERSION }}
+        host: 'linux'
+        target: 'desktop'
+        arch: 'gcc_64'
+        modules: 'qtwebsockets'
+        cache: true
+    
+    - name: 🛠️ Configure CMake
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+          -DCMAKE_PREFIX_PATH="${{ env.Qt6_DIR }}" \
+          -DBUILD_TESTING=OFF
+    
+    - name: 🔨 Build
+      run: cmake --build build --config ${{ env.BUILD_TYPE }} -j$(nproc)
+    
+    - name: 📦 Package
+      run: |
+        mkdir -p release
+        cp build/Modbus_PlexLink release/
+        cp build/Modbus_PlexLink_Service release/
+        cp README.md release/
+        cp LICENSE release/
+    
+    - name: 📤 Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: Modbus_PlexLink-Linux-x64
+        path: release/
+        retention-days: 30
+
+  # ============================================================================
+  # Code Quality
+  # ============================================================================
+  code-quality:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: 🔍 Check file encoding
+      run: |
+        echo "Checking for non-UTF8 files..."
+        find src -name "*.cpp" -o -name "*.h" | while read file; do
+          if ! file "$file" | grep -q "UTF-8\|ASCII"; then
+            echo "Warning: $file may have encoding issues"
+          fi
+        done
+    
+    - name: 📝 Check TODO/FIXME
+      run: |
+        echo "Counting TODO/FIXME comments..."
+        grep -rn "TODO\|FIXME" src/ --include="*.cpp" --include="*.h" || echo "No TODO/FIXME found"

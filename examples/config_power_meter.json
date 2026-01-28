@@ -1,0 +1,160 @@
+{
+    "version": "1.1.0",
+    "description": "电力仪表采集示例 - 多功能电表数据采集",
+    "channels": [
+        {
+            "name": "PowerMeterChannel",
+            "enabled": true,
+            "description": "电力仪表数据采集通道",
+            "collectors": [
+                {
+                    "name": "PowerMeter_01",
+                    "protocol": "modbus-tcp",
+                    "ip": "192.168.1.10",
+                    "port": 502,
+                    "unitId": 1,
+                    "pollRate": 1000,
+                    "timeout": 3000,
+                    "maxRetries": 3,
+                    "autoReconnect": true,
+                    "logErrors": true,
+                    "mappings": [
+                        {
+                            "tagName": "Voltage_A",
+                            "registerType": "Holding",
+                            "address": 0,
+                            "dataType": "Float32",
+                            "byteOrder": "CDAB",
+                            "scale": 1,
+                            "offset": 0,
+                            "unit": "V",
+                            "comment": "A相电压",
+                            "enabled": true
+                        },
+                        {
+                            "tagName": "Voltage_B",
+                            "registerType": "Holding",
+                            "address": 2,
+                            "dataType": "Float32",
+                            "byteOrder": "CDAB",
+                            "scale": 1,
+                            "offset": 0,
+                            "unit": "V",
+                            "comment": "B相电压",
+                            "enabled": true
+                        },
+                        {
+                            "tagName": "Voltage_C",
+                            "registerType": "Holding",
+                            "address": 4,
+                            "dataType": "Float32",
+                            "byteOrder": "CDAB",
+                            "scale": 1,
+                            "offset": 0,
+                            "unit": "V",
+                            "comment": "C相电压",
+                            "enabled": true
+                        },
+                        {
+                            "tagName": "Current_A",
+                            "registerType": "Holding",
+                            "address": 6,
+                            "dataType": "Float32",
+                            "byteOrder": "CDAB",
+                            "scale": 1,
+                            "offset": 0,
+                            "unit": "A",
+                            "comment": "A相电流",
+                            "enabled": true
+                        },
+                        {
+                            "tagName": "Current_B",
+                            "registerType": "Holding",
+                            "address": 8,
+                            "dataType": "Float32",
+                            "byteOrder": "CDAB",
+                            "scale": 1,
+                            "offset": 0,
+                            "unit": "A",
+                            "comment": "B相电流",
+                            "enabled": true
+                        },
+                        {
+                            "tagName": "Current_C",
+                            "registerType": "Holding",
+                            "address": 10,
+                            "dataType": "Float32",
+                            "byteOrder": "CDAB",
+                            "scale": 1,
+                            "offset": 0,
+                            "unit": "A",
+                            "comment": "C相电流",
+                            "enabled": true
+                        },
+                        {
+                            "tagName": "ActivePower_Total",
+                            "registerType": "Holding",
+                            "address": 12,
+                            "dataType": "Float32",
+                            "byteOrder": "CDAB",
+                            "scale": 1,
+                            "offset": 0,
+                            "unit": "kW",
+                            "comment": "总有功功率",
+                            "enabled": true
+                        },
+                        {
+                            "tagName": "ReactivePower_Total",
+                            "registerType": "Holding",
+                            "address": 14,
+                            "dataType": "Float32",
+                            "byteOrder": "CDAB",
+                            "scale": 1,
+                            "offset": 0,
+                            "unit": "kVar",
+                            "comment": "总无功功率",
+                            "enabled": true
+                        },
+                        {
+                            "tagName": "PowerFactor",
+                            "registerType": "Holding",
+                            "address": 16,
+                            "dataType": "Float32",
+                            "byteOrder": "CDAB",
+                            "scale": 1,
+                            "offset": 0,
+                            "unit": "",
+                            "comment": "功率因数",
+                            "enabled": true
+                        },
+                        {
+                            "tagName": "Frequency",
+                            "registerType": "Holding",
+                            "address": 18,
+                            "dataType": "Float32",
+                            "byteOrder": "CDAB",
+                            "scale": 1,
+                            "offset": 0,
+                            "unit": "Hz",
+                            "comment": "频率",
+                            "enabled": true
+                        },
+                        {
+                            "tagName": "Energy_Total",
+                            "registerType": "Holding",
+                            "address": 20,
+                            "dataType": "Float32",
+                            "byteOrder": "CDAB",
+                            "scale": 1,
+                            "offset": 0,
+                            "unit": "kWh",
+                            "comment": "总有功电能",
+                            "enabled": true
+                        }
+                    ]
+                }
+            ],
+            "servers": []
+        }
+    ]
+}

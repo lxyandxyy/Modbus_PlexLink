@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat:*)",
+      "Bash(find:*)",
+      "Bash(E:/Modbus_PlexLink/src/gui/MainWindow.cpp)",
+      "Bash(git --no-pager diff HEAD src/gui/ChannelConfigDialog.h)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -1,0 +1,64 @@
+{
+    "templateInfo": {
+        "id": "temperature_sensor_generic",
+        "name": "通用温度传感器",
+        "manufacturer": "通用",
+        "model": "PT100/NTC",
+        "category": "sensor",
+        "version": "1.0",
+        "author": "PlexLink Team",
+        "description": "通用温度传感器/变送器，适用于大多数 4-20mA 或 Modbus 输出的温度传感器",
+        "icon": "sensor"
+    },
+    "defaultConfig": {
+        "protocol": "modbus-tcp",
+        "port": 502,
+        "unitId": 1,
+        "pollRate": 2000,
+        "timeout": 3000,
+        "byteOrder": "AB"
+    },
+    "mappings": [
+        {
+            "tagName": "Temperature",
+            "registerType": "Holding",
+            "address": 0,
+            "dataType": "Int16",
+            "byteOrder": "AB",
+            "scale": 0.1,
+            "offset": 0,
+            "unit": "°C",
+            "description": "温度值（原始值×0.1）",
+            "group": "测量值"
+        },
+        {
+            "tagName": "Temperature_Raw",
+            "registerType": "Holding",
+            "address": 0,
+            "dataType": "Int16",
+            "byteOrder": "AB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "",
+            "description": "温度原始值",
+            "group": "原始值",
+            "enabled": false
+        },
+        {
+            "tagName": "Status",
+            "registerType": "Holding",
+            "address": 1,
+            "dataType": "UInt16",
+            "byteOrder": "AB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "",
+            "description": "传感器状态（0=正常）",
+            "group": "状态"
+        }
+    ],
+    "documentation": {
+        "manualUrl": "",
+        "notes": "1. 通用模板，适用于大多数温度传感器\n2. 实际寄存器地址和倍率需根据设备手册调整\n3. 常见倍率：0.1（整数带1位小数）、0.01（2位小数）"
+    }
+}

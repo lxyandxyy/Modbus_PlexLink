@@ -1,0 +1,156 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Modbus PlexLink Device Template",
+    "description": "设备模板格式规范 v1.0",
+    "type": "object",
+    "required": ["templateInfo", "defaultConfig", "mappings"],
+    "properties": {
+        "templateInfo": {
+            "type": "object",
+            "description": "模板元信息",
+            "required": ["id", "name", "manufacturer", "category", "version"],
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "模板唯一标识符",
+                    "pattern": "^[a-z0-9_]+$"
+                },
+                "name": {
+                    "type": "string",
+                    "description": "设备名称"
+                },
+                "manufacturer": {
+                    "type": "string",
+                    "description": "制造商"
+                },
+                "model": {
+                    "type": "string",
+                    "description": "型号"
+                },
+                "category": {
+                    "type": "string",
+                    "enum": ["power_meter", "plc", "sensor", "inverter", "controller", "other"],
+                    "description": "设备类别"
+                },
+                "version": {
+                    "type": "string",
+                    "description": "模板版本"
+                },
+                "author": {
+                    "type": "string",
+                    "description": "模板作者"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "设备描述"
+                },
+                "icon": {
+                    "type": "string",
+                    "description": "图标名称"
+                }
+            }
+        },
+        "defaultConfig": {
+            "type": "object",
+            "description": "默认连接配置",
+            "properties": {
+                "protocol": {
+                    "type": "string",
+                    "enum": ["modbus-tcp", "modbus-rtu"],
+                    "default": "modbus-tcp"
+                },
+                "port": {
+                    "type": "integer",
+                    "default": 502
+                },
+                "unitId": {
+                    "type": "integer",
+                    "default": 1
+                },
+                "pollRate": {
+                    "type": "integer",
+                    "description": "采集周期(ms)",
+                    "default": 1000
+                },
+                "timeout": {
+                    "type": "integer",
+                    "description": "超时时间(ms)",
+                    "default": 3000
+                },
+                "byteOrder": {
+                    "type": "string",
+                    "enum": ["AB", "BA", "ABCD", "DCBA", "CDAB", "BADC"],
+                    "description": "默认字节序"
+                }
+            }
+        },
+        "mappings": {
+            "type": "array",
+            "description": "数据点映射配置",
+            "items": {
+                "type": "object",
+                "required": ["tagName", "registerType", "address", "dataType"],
+                "properties": {
+                    "tagName": {
+                        "type": "string",
+                        "description": "标签名称"
+                    },
+                    "registerType": {
+                        "type": "string",
+                        "enum": ["Holding", "Input", "Coil", "Discrete"]
+                    },
+                    "address": {
+                        "type": "integer",
+                        "description": "寄存器地址"
+                    },
+                    "dataType": {
+                        "type": "string",
+                        "enum": ["Bool", "UInt16", "Int16", "UInt32", "Int32", "Float32", "UInt64", "Int64", "Float64"]
+                    },
+                    "byteOrder": {
+                        "type": "string",
+                        "enum": ["AB", "BA", "ABCD", "DCBA", "CDAB", "BADC"]
+                    },
+                    "scale": {
+                        "type": "number",
+                        "default": 1
+                    },
+                    "offset": {
+                        "type": "number",
+                        "default": 0
+                    },
+                    "unit": {
+                        "type": "string",
+                        "description": "工程单位"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "点位描述"
+                    },
+                    "group": {
+                        "type": "string",
+                        "description": "分组名称，用于UI显示"
+                    },
+                    "enabled": {
+                        "type": "boolean",
+                        "default": true
+                    }
+                }
+            }
+        },
+        "documentation": {
+            "type": "object",
+            "description": "文档信息",
+            "properties": {
+                "manualUrl": {
+                    "type": "string",
+                    "description": "手册下载链接"
+                },
+                "notes": {
+                    "type": "string",
+                    "description": "使用注意事项"
+                }
+            }
+        }
+    }
+}

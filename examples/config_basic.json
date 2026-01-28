@@ -1,0 +1,105 @@
+{
+    "version": "1.1.0",
+    "description": "基本配置示例 - Modbus TCP 数据采集",
+    "channels": [
+        {
+            "name": "BasicChannel",
+            "enabled": true,
+            "description": "基本采集通道示例",
+            "collectors": [
+                {
+                    "name": "Collector1",
+                    "protocol": "modbus-tcp",
+                    "ip": "192.168.1.100",
+                    "port": 502,
+                    "unitId": 1,
+                    "pollRate": 1000,
+                    "timeout": 3000,
+                    "maxRetries": 3,
+                    "autoReconnect": true,
+                    "logErrors": true,
+                    "mappings": [
+                        {
+                            "tagName": "Temperature",
+                            "registerType": "Holding",
+                            "address": 0,
+                            "dataType": "Int16",
+                            "byteOrder": "AB",
+                            "scale": 0.1,
+                            "offset": 0,
+                            "unit": "°C",
+                            "comment": "环境温度",
+                            "enabled": true
+                        },
+                        {
+                            "tagName": "Humidity",
+                            "registerType": "Holding",
+                            "address": 1,
+                            "dataType": "UInt16",
+                            "byteOrder": "AB",
+                            "scale": 0.1,
+                            "offset": 0,
+                            "unit": "%RH",
+                            "comment": "环境湿度",
+                            "enabled": true
+                        },
+                        {
+                            "tagName": "Pressure",
+                            "registerType": "Holding",
+                            "address": 2,
+                            "dataType": "Float32",
+                            "byteOrder": "CDAB",
+                            "scale": 1,
+                            "offset": 0,
+                            "unit": "kPa",
+                            "comment": "大气压力",
+                            "enabled": true
+                        }
+                    ]
+                }
+            ],
+            "servers": [
+                {
+                    "name": "VirtualServer1",
+                    "protocol": "modbus-tcp",
+                    "listenAddress": "0.0.0.0",
+                    "port": 1502,
+                    "maxClients": 10,
+                    "timeout": 1000,
+                    "enabled": true,
+                    "virtualDevices": [
+                        {
+                            "virtualUnitId": 1,
+                            "name": "VirtualDevice1",
+                            "enabled": true,
+                            "mappings": [
+                                {
+                                    "tagName": "Temperature",
+                                    "registerType": "Holding",
+                                    "address": 0,
+                                    "dataType": "Int16",
+                                    "byteOrder": "AB",
+                                    "scale": 10,
+                                    "offset": 0,
+                                    "writable": false,
+                                    "comment": "温度×10"
+                                },
+                                {
+                                    "tagName": "Humidity",
+                                    "registerType": "Holding",
+                                    "address": 1,
+                                    "dataType": "UInt16",
+                                    "byteOrder": "AB",
+                                    "scale": 10,
+                                    "offset": 0,
+                                    "writable": false,
+                                    "comment": "湿度×10"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

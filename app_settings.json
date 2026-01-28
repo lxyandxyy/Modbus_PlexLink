@@ -1,0 +1,20 @@
+{
+    "api": {
+        "enabled": true,
+        "httpPort": 8080,
+        "wsPort": 8081
+    },
+    "auth": {
+        "enabled": false,
+        "username": "",
+        "password": ""
+    },
+    "startup": {
+        "autoStartChannels": false,
+        "minimizeToTray": true
+    },
+    "files": {
+        "channelConfig": "config.json",
+        "alarmConfig": "alarm_config.json"
+    }
+}

@@ -1,0 +1,124 @@
+# 构建目录
+build/
+build-*/
+out/
+bin/
+Debug/
+Release/
+RelWithDebInfo/
+MinSizeRel/
+
+# Qt生成文件
+*.autosave
+*.user
+*.user.*
+*.qmlc
+*.jsc
+.qmake.stash
+.qmake.cache
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+install_manifest.txt
+CTestTestfile.cmake
+_deps/
+CMakeUserPresets.json
+
+# 编译输出
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.so.*
+*.dylib
+*.a
+*.lib
+*.exp
+
+# 但保留 ThirdParty 中的库文件
+!ThirdParty/libmodbus/*.lib
+!ThirdParty/libmodbus/*.dll
+!ThirdParty/libcurl/*.lib
+*.ilk
+*.pdb
+*.suo
+*.opensdf
+*.sdf
+*.sln.docstates
+*.VC.db
+*.VC.opendb
+
+# Qt MOC/UIC/RCC生成文件
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+
+# IDE配置文件
+.vscode/
+.vs/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# 临时文件
+*.tmp
+*.temp
+*.log
+*.bak
+*.orig
+
+# 测试输出
+Testing/
+*.gcda
+*.gcno
+*.gcov
+coverage.info
+coverage_report/
+
+# 包管理
+*.zip
+*.tar.gz
+*.7z
+*.rar
+
+# 配置文件（可选）
+# 如果不想上传配置文件，取消下面的注释
+# *.json
+# *.csv
+
+# 但保留示例配置文件
+!config_example*.json
+!*_example.csv
+!collector_mapping_example.csv
+!server_mapping_example.csv
+!采集器映射示例_中文.csv
+!批量虚拟设备映射示例_中文.csv
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.Python
+venv/
+env/
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# 其他
+*.stackdump
+# Linux core dump files (but not src/core/ directory)
+/core
+core.[0-9]*
+

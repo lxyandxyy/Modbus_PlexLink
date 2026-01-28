@@ -1,0 +1,96 @@
+{
+    "version": "1.0",
+    "description": "告警配置示例",
+    "rules": [
+        {
+            "id": "alarm_001",
+            "name": "温度过高告警",
+            "enabled": true,
+            "tagName": "Temperature",
+            "condition": {
+                "type": "high",
+                "threshold": 80,
+                "deadband": 2,
+                "delay": 5000
+            },
+            "severity": "warning",
+            "message": "温度超过80°C警戒值",
+            "autoAcknowledge": false,
+            "triggerRecording": true
+        },
+        {
+            "id": "alarm_002",
+            "name": "温度极高告警",
+            "enabled": true,
+            "tagName": "Temperature",
+            "condition": {
+                "type": "high_high",
+                "threshold": 100,
+                "deadband": 2,
+                "delay": 0
+            },
+            "severity": "critical",
+            "message": "温度超过100°C危险值！立即处理！",
+            "autoAcknowledge": false,
+            "triggerRecording": true
+        },
+        {
+            "id": "alarm_003",
+            "name": "温度过低告警",
+            "enabled": true,
+            "tagName": "Temperature",
+            "condition": {
+                "type": "low",
+                "threshold": 10,
+                "deadband": 2,
+                "delay": 10000
+            },
+            "severity": "warning",
+            "message": "温度低于10°C",
+            "autoAcknowledge": true,
+            "triggerRecording": false
+        },
+        {
+            "id": "alarm_004",
+            "name": "电流过载告警",
+            "enabled": true,
+            "tagName": "MotorCurrent",
+            "condition": {
+                "type": "high",
+                "threshold": 15,
+                "deadband": 0.5,
+                "delay": 3000
+            },
+            "severity": "warning",
+            "message": "电机电流超过额定值",
+            "autoAcknowledge": false,
+            "triggerRecording": true
+        },
+        {
+            "id": "alarm_005",
+            "name": "液位低告警",
+            "enabled": true,
+            "tagName": "L2_TankLevel",
+            "condition": {
+                "type": "low",
+                "threshold": 20,
+                "deadband": 5,
+                "delay": 30000
+            },
+            "severity": "info",
+            "message": "料罐液位低于20%，请及时补料",
+            "autoAcknowledge": true,
+            "triggerRecording": false
+        }
+    ],
+    "globalSettings": {
+        "maxActiveAlarms": 100,
+        "alarmHistoryDays": 30,
+        "soundEnabled": true,
+        "emailNotification": {
+            "enabled": false,
+            "smtpServer": "",
+            "recipients": []
+        }
+    }
+}

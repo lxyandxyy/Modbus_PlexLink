@@ -1,0 +1,219 @@
+{
+    "templateInfo": {
+        "id": "acrel_amc96",
+        "name": "安科瑞 AMC96 多功能电力仪表",
+        "manufacturer": "安科瑞",
+        "model": "AMC96",
+        "category": "power_meter",
+        "version": "1.0",
+        "author": "PlexLink Team",
+        "description": "三相多功能电力仪表，适用于配电室电力监控",
+        "icon": "power_meter"
+    },
+    "defaultConfig": {
+        "protocol": "modbus-tcp",
+        "port": 502,
+        "unitId": 1,
+        "pollRate": 1000,
+        "timeout": 3000,
+        "byteOrder": "ABCD"
+    },
+    "mappings": [
+        {
+            "tagName": "Ua",
+            "registerType": "Holding",
+            "address": 0,
+            "dataType": "Float32",
+            "byteOrder": "ABCD",
+            "scale": 1,
+            "offset": 0,
+            "unit": "V",
+            "description": "A相电压",
+            "group": "电压"
+        },
+        {
+            "tagName": "Ub",
+            "registerType": "Holding",
+            "address": 2,
+            "dataType": "Float32",
+            "byteOrder": "ABCD",
+            "scale": 1,
+            "offset": 0,
+            "unit": "V",
+            "description": "B相电压",
+            "group": "电压"
+        },
+        {
+            "tagName": "Uc",
+            "registerType": "Holding",
+            "address": 4,
+            "dataType": "Float32",
+            "byteOrder": "ABCD",
+            "scale": 1,
+            "offset": 0,
+            "unit": "V",
+            "description": "C相电压",
+            "group": "电压"
+        },
+        {
+            "tagName": "Uab",
+            "registerType": "Holding",
+            "address": 6,
+            "dataType": "Float32",
+            "byteOrder": "ABCD",
+            "scale": 1,
+            "offset": 0,
+            "unit": "V",
+            "description": "AB线电压",
+            "group": "电压"
+        },
+        {
+            "tagName": "Ubc",
+            "registerType": "Holding",
+            "address": 8,
+            "dataType": "Float32",
+            "byteOrder": "ABCD",
+            "scale": 1,
+            "offset": 0,
+            "unit": "V",
+            "description": "BC线电压",
+            "group": "电压"
+        },
+        {
+            "tagName": "Uca",
+            "registerType": "Holding",
+            "address": 10,
+            "dataType": "Float32",
+            "byteOrder": "ABCD",
+            "scale": 1,
+            "offset": 0,
+            "unit": "V",
+            "description": "CA线电压",
+            "group": "电压"
+        },
+        {
+            "tagName": "Ia",
+            "registerType": "Holding",
+            "address": 12,
+            "dataType": "Float32",
+            "byteOrder": "ABCD",
+            "scale": 1,
+            "offset": 0,
+            "unit": "A",
+            "description": "A相电流",
+            "group": "电流"
+        },
+        {
+            "tagName": "Ib",
+            "registerType": "Holding",
+            "address": 14,
+            "dataType": "Float32",
+            "byteOrder": "ABCD",
+            "scale": 1,
+            "offset": 0,
+            "unit": "A",
+            "description": "B相电流",
+            "group": "电流"
+        },
+        {
+            "tagName": "Ic",
+            "registerType": "Holding",
+            "address": 16,
+            "dataType": "Float32",
+            "byteOrder": "ABCD",
+            "scale": 1,
+            "offset": 0,
+            "unit": "A",
+            "description": "C相电流",
+            "group": "电流"
+        },
+        {
+            "tagName": "P",
+            "registerType": "Holding",
+            "address": 18,
+            "dataType": "Float32",
+            "byteOrder": "ABCD",
+            "scale": 1,
+            "offset": 0,
+            "unit": "kW",
+            "description": "总有功功率",
+            "group": "功率"
+        },
+        {
+            "tagName": "Q",
+            "registerType": "Holding",
+            "address": 20,
+            "dataType": "Float32",
+            "byteOrder": "ABCD",
+            "scale": 1,
+            "offset": 0,
+            "unit": "kVar",
+            "description": "总无功功率",
+            "group": "功率"
+        },
+        {
+            "tagName": "S",
+            "registerType": "Holding",
+            "address": 22,
+            "dataType": "Float32",
+            "byteOrder": "ABCD",
+            "scale": 1,
+            "offset": 0,
+            "unit": "kVA",
+            "description": "总视在功率",
+            "group": "功率"
+        },
+        {
+            "tagName": "PF",
+            "registerType": "Holding",
+            "address": 24,
+            "dataType": "Float32",
+            "byteOrder": "ABCD",
+            "scale": 1,
+            "offset": 0,
+            "unit": "",
+            "description": "总功率因数",
+            "group": "功率"
+        },
+        {
+            "tagName": "F",
+            "registerType": "Holding",
+            "address": 26,
+            "dataType": "Float32",
+            "byteOrder": "ABCD",
+            "scale": 1,
+            "offset": 0,
+            "unit": "Hz",
+            "description": "频率",
+            "group": "频率"
+        },
+        {
+            "tagName": "Ep_imp",
+            "registerType": "Holding",
+            "address": 28,
+            "dataType": "Float32",
+            "byteOrder": "ABCD",
+            "scale": 1,
+            "offset": 0,
+            "unit": "kWh",
+            "description": "正向有功电能",
+            "group": "电能"
+        },
+        {
+            "tagName": "Ep_exp",
+            "registerType": "Holding",
+            "address": 30,
+            "dataType": "Float32",
+            "byteOrder": "ABCD",
+            "scale": 1,
+            "offset": 0,
+            "unit": "kWh",
+            "description": "反向有功电能",
+            "group": "电能"
+        }
+    ],
+    "documentation": {
+        "manualUrl": "https://www.acrel.cn/",
+        "notes": "1. 默认通讯地址为1，波特率9600\n2. 电流互感器变比需在设备端设置\n3. Float32数据为ABCD大端序"
+    }
+}

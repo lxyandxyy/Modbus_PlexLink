@@ -1,0 +1,123 @@
+{
+    "templateInfo": {
+        "id": "schneider_m340",
+        "name": "施耐德 Modicon M340 PLC",
+        "manufacturer": "Schneider Electric",
+        "model": "Modicon M340",
+        "category": "plc",
+        "version": "1.0",
+        "author": "PlexLink Team",
+        "description": "施耐德 M340 系列 PLC，原生支持 Modbus TCP",
+        "icon": "plc"
+    },
+    "defaultConfig": {
+        "protocol": "modbus-tcp",
+        "port": 502,
+        "unitId": 1,
+        "pollRate": 500,
+        "timeout": 3000,
+        "byteOrder": "ABCD"
+    },
+    "mappings": [
+        {
+            "tagName": "CPU_Run",
+            "registerType": "Coil",
+            "address": 0,
+            "dataType": "Bool",
+            "byteOrder": "AB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "",
+            "description": "CPU运行状态",
+            "group": "系统状态"
+        },
+        {
+            "tagName": "CPU_Fault",
+            "registerType": "Coil",
+            "address": 1,
+            "dataType": "Bool",
+            "byteOrder": "AB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "",
+            "description": "CPU故障",
+            "group": "系统状态"
+        },
+        {
+            "tagName": "MW0",
+            "registerType": "Holding",
+            "address": 0,
+            "dataType": "Int16",
+            "byteOrder": "AB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "",
+            "description": "内存字 MW0",
+            "group": "内存区"
+        },
+        {
+            "tagName": "MW1",
+            "registerType": "Holding",
+            "address": 1,
+            "dataType": "Int16",
+            "byteOrder": "AB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "",
+            "description": "内存字 MW1",
+            "group": "内存区"
+        },
+        {
+            "tagName": "MD0",
+            "registerType": "Holding",
+            "address": 2,
+            "dataType": "Float32",
+            "byteOrder": "ABCD",
+            "scale": 1,
+            "offset": 0,
+            "unit": "",
+            "description": "内存双字 MD0 (浮点)",
+            "group": "内存区"
+        },
+        {
+            "tagName": "MD2",
+            "registerType": "Holding",
+            "address": 4,
+            "dataType": "Float32",
+            "byteOrder": "ABCD",
+            "scale": 1,
+            "offset": 0,
+            "unit": "",
+            "description": "内存双字 MD2 (浮点)",
+            "group": "内存区"
+        },
+        {
+            "tagName": "Analog_In_1",
+            "registerType": "Input",
+            "address": 0,
+            "dataType": "Int16",
+            "byteOrder": "AB",
+            "scale": 0.00305,
+            "offset": 0,
+            "unit": "",
+            "description": "模拟量输入1 (0-10V → 0-32767)",
+            "group": "模拟量输入"
+        },
+        {
+            "tagName": "Analog_In_2",
+            "registerType": "Input",
+            "address": 1,
+            "dataType": "Int16",
+            "byteOrder": "AB",
+            "scale": 0.00061,
+            "offset": 0,
+            "unit": "mA",
+            "description": "模拟量输入2 (4-20mA → 0-32767)",
+            "group": "模拟量输入"
+        }
+    ],
+    "documentation": {
+        "manualUrl": "https://www.se.com/",
+        "notes": "1. M340 原生支持 Modbus TCP，无需额外配置\n2. 使用 Unity Pro 编程\n3. 内存区地址与 %MW 变量对应\n4. 此模板为示例，实际地址需根据项目配置"
+    }
+}

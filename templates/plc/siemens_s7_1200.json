@@ -1,0 +1,135 @@
+{
+    "templateInfo": {
+        "id": "siemens_s7_1200",
+        "name": "西门子 S7-1200 PLC",
+        "manufacturer": "Siemens",
+        "model": "S7-1200",
+        "category": "plc",
+        "version": "1.0",
+        "author": "PlexLink Team",
+        "description": "西门子 S7-1200 系列 PLC，需在 TIA Portal 中配置 Modbus TCP 服务器",
+        "icon": "plc"
+    },
+    "defaultConfig": {
+        "protocol": "modbus-tcp",
+        "port": 502,
+        "unitId": 1,
+        "pollRate": 500,
+        "timeout": 3000,
+        "byteOrder": "CDAB"
+    },
+    "mappings": [
+        {
+            "tagName": "Run_Status",
+            "registerType": "Coil",
+            "address": 0,
+            "dataType": "Bool",
+            "byteOrder": "AB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "",
+            "description": "运行状态",
+            "group": "状态"
+        },
+        {
+            "tagName": "Alarm_Status",
+            "registerType": "Coil",
+            "address": 1,
+            "dataType": "Bool",
+            "byteOrder": "AB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "",
+            "description": "报警状态",
+            "group": "状态"
+        },
+        {
+            "tagName": "Auto_Mode",
+            "registerType": "Coil",
+            "address": 2,
+            "dataType": "Bool",
+            "byteOrder": "AB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "",
+            "description": "自动模式",
+            "group": "状态"
+        },
+        {
+            "tagName": "Speed_SP",
+            "registerType": "Holding",
+            "address": 0,
+            "dataType": "Int16",
+            "byteOrder": "AB",
+            "scale": 0.01,
+            "offset": 0,
+            "unit": "Hz",
+            "description": "速度设定值",
+            "group": "设定值"
+        },
+        {
+            "tagName": "Speed_PV",
+            "registerType": "Holding",
+            "address": 1,
+            "dataType": "Int16",
+            "byteOrder": "AB",
+            "scale": 0.01,
+            "offset": 0,
+            "unit": "Hz",
+            "description": "速度反馈值",
+            "group": "反馈值"
+        },
+        {
+            "tagName": "Temperature",
+            "registerType": "Holding",
+            "address": 2,
+            "dataType": "Float32",
+            "byteOrder": "CDAB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "°C",
+            "description": "温度",
+            "group": "模拟量"
+        },
+        {
+            "tagName": "Pressure",
+            "registerType": "Holding",
+            "address": 4,
+            "dataType": "Float32",
+            "byteOrder": "CDAB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "MPa",
+            "description": "压力",
+            "group": "模拟量"
+        },
+        {
+            "tagName": "Production_Count",
+            "registerType": "Holding",
+            "address": 6,
+            "dataType": "UInt32",
+            "byteOrder": "CDAB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "pcs",
+            "description": "生产计数",
+            "group": "计数"
+        },
+        {
+            "tagName": "Running_Time",
+            "registerType": "Holding",
+            "address": 8,
+            "dataType": "UInt32",
+            "byteOrder": "CDAB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "s",
+            "description": "运行时间",
+            "group": "计时"
+        }
+    ],
+    "documentation": {
+        "manualUrl": "https://support.industry.siemens.com/",
+        "notes": "1. 需要在 TIA Portal 中添加 Modbus TCP 服务器功能块\n2. 西门子 PLC 使用 CDAB(中端大序) 字节序\n3. 线圈和寄存器地址需要与 PLC 程序中的映射一致\n4. 此模板为示例，实际地址需根据项目配置"
+    }
+}

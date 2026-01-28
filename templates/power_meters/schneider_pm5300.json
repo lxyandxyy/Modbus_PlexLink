@@ -1,0 +1,231 @@
+{
+    "templateInfo": {
+        "id": "schneider_pm5300",
+        "name": "施耐德 PM5300 多功能电力仪表",
+        "manufacturer": "Schneider Electric",
+        "model": "PM5300",
+        "category": "power_meter",
+        "version": "1.0",
+        "author": "PlexLink Team",
+        "description": "高精度三相多功能电力仪表，支持谐波分析和电能质量监测",
+        "icon": "power_meter"
+    },
+    "defaultConfig": {
+        "protocol": "modbus-tcp",
+        "port": 502,
+        "unitId": 1,
+        "pollRate": 1000,
+        "timeout": 3000,
+        "byteOrder": "CDAB"
+    },
+    "mappings": [
+        {
+            "tagName": "I1",
+            "registerType": "Holding",
+            "address": 2999,
+            "dataType": "Float32",
+            "byteOrder": "CDAB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "A",
+            "description": "A相电流",
+            "group": "电流"
+        },
+        {
+            "tagName": "I2",
+            "registerType": "Holding",
+            "address": 3001,
+            "dataType": "Float32",
+            "byteOrder": "CDAB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "A",
+            "description": "B相电流",
+            "group": "电流"
+        },
+        {
+            "tagName": "I3",
+            "registerType": "Holding",
+            "address": 3003,
+            "dataType": "Float32",
+            "byteOrder": "CDAB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "A",
+            "description": "C相电流",
+            "group": "电流"
+        },
+        {
+            "tagName": "I_Avg",
+            "registerType": "Holding",
+            "address": 3009,
+            "dataType": "Float32",
+            "byteOrder": "CDAB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "A",
+            "description": "平均电流",
+            "group": "电流"
+        },
+        {
+            "tagName": "V1",
+            "registerType": "Holding",
+            "address": 3027,
+            "dataType": "Float32",
+            "byteOrder": "CDAB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "V",
+            "description": "A相电压",
+            "group": "电压"
+        },
+        {
+            "tagName": "V2",
+            "registerType": "Holding",
+            "address": 3029,
+            "dataType": "Float32",
+            "byteOrder": "CDAB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "V",
+            "description": "B相电压",
+            "group": "电压"
+        },
+        {
+            "tagName": "V3",
+            "registerType": "Holding",
+            "address": 3031,
+            "dataType": "Float32",
+            "byteOrder": "CDAB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "V",
+            "description": "C相电压",
+            "group": "电压"
+        },
+        {
+            "tagName": "V12",
+            "registerType": "Holding",
+            "address": 3019,
+            "dataType": "Float32",
+            "byteOrder": "CDAB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "V",
+            "description": "AB线电压",
+            "group": "电压"
+        },
+        {
+            "tagName": "V23",
+            "registerType": "Holding",
+            "address": 3021,
+            "dataType": "Float32",
+            "byteOrder": "CDAB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "V",
+            "description": "BC线电压",
+            "group": "电压"
+        },
+        {
+            "tagName": "V31",
+            "registerType": "Holding",
+            "address": 3023,
+            "dataType": "Float32",
+            "byteOrder": "CDAB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "V",
+            "description": "CA线电压",
+            "group": "电压"
+        },
+        {
+            "tagName": "Freq",
+            "registerType": "Holding",
+            "address": 3109,
+            "dataType": "Float32",
+            "byteOrder": "CDAB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "Hz",
+            "description": "频率",
+            "group": "频率"
+        },
+        {
+            "tagName": "kW_Total",
+            "registerType": "Holding",
+            "address": 3059,
+            "dataType": "Float32",
+            "byteOrder": "CDAB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "kW",
+            "description": "总有功功率",
+            "group": "功率"
+        },
+        {
+            "tagName": "kvar_Total",
+            "registerType": "Holding",
+            "address": 3067,
+            "dataType": "Float32",
+            "byteOrder": "CDAB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "kVar",
+            "description": "总无功功率",
+            "group": "功率"
+        },
+        {
+            "tagName": "kVA_Total",
+            "registerType": "Holding",
+            "address": 3075,
+            "dataType": "Float32",
+            "byteOrder": "CDAB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "kVA",
+            "description": "总视在功率",
+            "group": "功率"
+        },
+        {
+            "tagName": "PF_Total",
+            "registerType": "Holding",
+            "address": 3083,
+            "dataType": "Float32",
+            "byteOrder": "CDAB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "",
+            "description": "总功率因数",
+            "group": "功率"
+        },
+        {
+            "tagName": "kWh_Del",
+            "registerType": "Holding",
+            "address": 3203,
+            "dataType": "Float32",
+            "byteOrder": "CDAB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "kWh",
+            "description": "正向有功电能",
+            "group": "电能"
+        },
+        {
+            "tagName": "kWh_Rec",
+            "registerType": "Holding",
+            "address": 3207,
+            "dataType": "Float32",
+            "byteOrder": "CDAB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "kWh",
+            "description": "反向有功电能",
+            "group": "电能"
+        }
+    ],
+    "documentation": {
+        "manualUrl": "https://www.se.com/",
+        "notes": "1. 施耐德仪表使用CDAB(中端大序)字节序\n2. 寄存器地址从2999开始(Modbus地址3000)\n3. 支持RS485和以太网通讯"
+    }
+}

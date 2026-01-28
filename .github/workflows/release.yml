@@ -1,0 +1,388 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 1.1.0)'
+        required: true
+        type: string
+
+env:
+  QT_VERSION: '6.5.3'
+  BUILD_TYPE: Release
+
+jobs:
+  # ============================================================================
+  # Build Release Artifacts
+  # ============================================================================
+  build-release:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: Windows
+            arch: x64
+            qt_arch: win64_mingw
+            generator: "MinGW Makefiles"
+          - os: ubuntu-22.04
+            platform: Linux
+            arch: x64
+            qt_arch: gcc_64
+            generator: "Unix Makefiles"
+    
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: 📦 Install Linux dependencies
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential cmake libmodbus-dev \
+          libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0
+    
+    - name: 📦 Setup MinGW (Windows)
+      if: runner.os == 'Windows'
+      uses: egor-tensin/setup-mingw@v2
+      with:
+        platform: x64
+        version: 12.2.0
+    
+    - name: 🔧 Install Qt
+      uses: jurplel/install-qt-action@v3
+      with:
+        version: ${{ env.QT_VERSION }}
+        host: ${{ runner.os == 'Windows' && 'windows' || 'linux' }}
+        target: 'desktop'
+        arch: ${{ matrix.qt_arch }}
+        modules: 'qtwebsockets'
+        cache: true
+    
+    - name: 🛠️ Configure CMake (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        cmake -B build -G "${{ matrix.generator }}" `
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
+          -DCMAKE_PREFIX_PATH="${{ env.Qt6_DIR }}" `
+          -DBUILD_TESTING=OFF
+    
+    - name: 🛠️ Configure CMake (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        cmake -B build -G "${{ matrix.generator }}" \
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+          -DBUILD_TESTING=OFF
+    
+    - name: 🔨 Build (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: cmake --build build --config ${{ env.BUILD_TYPE }} -j4
+    
+    - name: 🔨 Build (Linux)
+      if: runner.os == 'Linux'
+      run: cmake --build build --config ${{ env.BUILD_TYPE }} -j4
+    
+    - name: 📦 Deploy Qt DLLs (Windows - GUI)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $QtDir = "${{ env.Qt6_DIR }}"
+        $QtBinDir = Join-Path $QtDir "bin"
+        $QtPluginsDir = Join-Path $QtDir "plugins"
+        $QtPlatformsDir = Join-Path $QtPluginsDir "platforms"
+        $windeployqt = Join-Path $QtBinDir "windeployqt.exe"
+        
+        if (-not (Test-Path $windeployqt)) {
+          Write-Error "windeployqt.exe not found at $windeployqt"
+          exit 1
+        }
+        
+        Write-Host "=== Deploying Qt DLLs for GUI application ==="
+        Write-Host "Qt Directory: $QtDir"
+        Write-Host "Qt Bin Directory: $QtBinDir"
+        Write-Host "Qt Plugins Directory: $QtPluginsDir"
+        
+        # Verify plugins directory exists
+        if (-not (Test-Path $QtPluginsDir)) {
+          Write-Error "Qt plugins directory not found: $QtPluginsDir"
+          exit 1
+        }
+        
+        # Verify platforms directory exists
+        if (-not (Test-Path $QtPlatformsDir)) {
+          Write-Error "Qt platforms directory not found: $QtPlatformsDir"
+          exit 1
+        }
+        
+        # List platform plugins
+        Write-Host "Platform plugins found:"
+        Get-ChildItem $QtPlatformsDir -Filter "*.dll" | ForEach-Object {
+          Write-Host "  - $($_.Name)"
+        }
+        
+        # Set environment variables for windeployqt
+        $env:QT_PLUGIN_PATH = $QtPluginsDir
+        $env:QT_DIR = $QtDir
+        $env:QTDIR = $QtDir
+        $env:PATH = "$QtBinDir;$env:PATH"
+        
+        # Change to build directory and run windeployqt
+        $deploymentSuccess = $false
+        Push-Location build
+        try {
+          # Use --dir to explicitly specify deployment directory
+          Write-Host "Running windeployqt..."
+          $windeployqtOutput = & $windeployqt --release --compiler-runtime --no-translations --no-system-d3d-compiler --no-opengl-sw --dir . Modbus_PlexLink.exe 2>&1
+          $windeployqtSuccess = ($LASTEXITCODE -eq 0)
+          
+          if ($windeployqtSuccess) {
+            Write-Host "✓ Qt DLLs deployed successfully by windeployqt"
+            $deploymentSuccess = $true
+          } else {
+            Write-Warning "windeployqt exited with code $LASTEXITCODE, attempting manual deployment..."
+            
+            # Manual fallback: copy Qt DLLs
+            $QtDlls = @(
+              "Qt6Core.dll",
+              "Qt6Gui.dll",
+              "Qt6Widgets.dll",
+              "Qt6Network.dll",
+              "Qt6Concurrent.dll",
+              "Qt6WebSockets.dll",
+              "Qt6PrintSupport.dll"
+            )
+            
+            $dllsCopied = 0
+            foreach ($dll in $QtDlls) {
+              $srcDll = Join-Path $QtBinDir $dll
+              if (Test-Path $srcDll) {
+                Copy-Item $srcDll (Get-Location) -Force -ErrorAction SilentlyContinue
+                if (Test-Path $dll) {
+                  $dllsCopied++
+                  Write-Host "  ✓ Copied $dll"
+                }
+              }
+            }
+            
+            # Copy platform plugin
+            $BuildPlatformsDir = Join-Path (Get-Location) "platforms"
+            if (-not (Test-Path $BuildPlatformsDir)) {
+              New-Item -ItemType Directory -Path $BuildPlatformsDir | Out-Null
+            }
+            
+            $PlatformDll = Join-Path $QtPlatformsDir "qwindows.dll"
+            if (Test-Path $PlatformDll) {
+              Copy-Item $PlatformDll $BuildPlatformsDir -Force
+              Write-Host "  ✓ Copied qwindows.dll to platforms/"
+              $dllsCopied++
+            } else {
+              Write-Warning "qwindows.dll not found at $PlatformDll"
+            }
+            
+            if ($dllsCopied -gt 0) {
+              Write-Host "✓ Manually deployed $dllsCopied Qt components"
+              $deploymentSuccess = $true
+            } else {
+              Write-Error "Failed to manually deploy Qt DLLs"
+            }
+          }
+        } catch {
+          Write-Error "Exception during Qt DLL deployment: $_"
+          $deploymentSuccess = $false
+        } finally {
+          Pop-Location
+        }
+        
+        # Check deployment result - if successful, ensure we exit with code 0
+        if ($deploymentSuccess) {
+          Write-Host "✓ Qt DLL deployment completed successfully"
+          # Explicitly exit with success code to override any previous failures
+          exit 0
+        } else {
+          Write-Error "Qt DLL deployment failed"
+          exit 1
+        }
+    
+    - name: 📦 Deploy Qt DLLs (Windows - Service)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $QtDir = "${{ env.Qt6_DIR }}"
+        $QtBinDir = Join-Path $QtDir "bin"
+        $windeployqt = Join-Path $QtBinDir "windeployqt.exe"
+        
+        if (-not (Test-Path $windeployqt)) {
+          Write-Error "windeployqt.exe not found at $windeployqt"
+          exit 1
+        }
+        
+        Write-Host "=== Deploying Qt DLLs for Service application ==="
+        Write-Host "Qt Directory: $QtDir"
+        
+        # Set environment variables for windeployqt
+        $env:QT_PLUGIN_PATH = Join-Path $QtDir "plugins"
+        $env:QT_DIR = $QtDir
+        $env:QTDIR = $QtDir
+        $env:PATH = "$QtBinDir;$env:PATH"
+        
+        # Change to build directory and run windeployqt
+        Push-Location build
+        try {
+          # Service doesn't need GUI plugins, but still needs core DLLs
+          & $windeployqt --release --compiler-runtime --no-translations --no-system-d3d-compiler --no-opengl-sw --no-quick-import --dir . Modbus_PlexLink_Service.exe
+          
+          if ($LASTEXITCODE -ne 0) {
+            Write-Warning "windeployqt failed for Service, but continuing (Service may not need all plugins)"
+          } else {
+            Write-Host "✓ Qt DLLs deployed for Service application"
+          }
+        } finally {
+          Pop-Location
+        }
+    
+    - name: 📦 Package Windows
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $version = "${{ github.event.inputs.version || github.ref_name }}"
+        $version = $version -replace '^v', ''
+        
+        New-Item -ItemType Directory -Force -Path "dist"
+        
+        # Copy executables
+        Copy-Item "build/Modbus_PlexLink.exe" "dist/"
+        Copy-Item "build/Modbus_PlexLink_Service.exe" "dist/"
+        
+        # Copy all DLLs (Qt DLLs should already be in build directory after windeployqt)
+        Copy-Item "build/*.dll" "dist/" -ErrorAction SilentlyContinue
+        
+        # Copy Qt plugins directory (required for Qt to work)
+        if (Test-Path "build/platforms") {
+          Copy-Item -Recurse "build/platforms" "dist/"
+          Write-Host "✓ Copied Qt platforms plugin"
+        }
+        
+        # Copy other Qt plugin directories if they exist
+        $pluginDirs = @("imageformats", "iconengines", "styles")
+        foreach ($dir in $pluginDirs) {
+          if (Test-Path "build/$dir") {
+            Copy-Item -Recurse "build/$dir" "dist/"
+            Write-Host "✓ Copied Qt $dir plugin"
+          }
+        }
+        
+        # Copy documentation
+        Copy-Item "README.md" "dist/"
+        Copy-Item "LICENSE" "dist/"
+        Copy-Item "CHANGELOG.md" "dist/"
+        
+        # Copy templates directory if exists
+        if (Test-Path "templates") {
+          Copy-Item -Recurse "templates" "dist/"
+          Write-Host "✓ Copied templates directory"
+        }
+        
+        # Copy examples
+        if (Test-Path "examples") {
+          Copy-Item -Recurse "examples" "dist/"
+          Write-Host "✓ Copied examples directory"
+        }
+        
+        Write-Host "Creating release package..."
+        Compress-Archive -Path "dist/*" -DestinationPath "Modbus_PlexLink-$version-${{ matrix.platform }}-${{ matrix.arch }}.zip" -Force
+        Write-Host "✓ Release package created: Modbus_PlexLink-$version-${{ matrix.platform }}-${{ matrix.arch }}.zip"
+    
+    - name: 📦 Package Linux
+      if: runner.os == 'Linux'
+      run: |
+        VERSION="${{ github.event.inputs.version || github.ref_name }}"
+        VERSION="${VERSION#v}"
+        
+        mkdir -p dist
+        
+        # Copy executables
+        cp build/Modbus_PlexLink dist/
+        cp build/Modbus_PlexLink_Service dist/
+        
+        # Copy documentation
+        cp README.md dist/
+        cp LICENSE dist/
+        cp CHANGELOG.md dist/
+        
+        # Copy examples
+        if [ -d "examples" ]; then
+          cp -r examples dist/
+        fi
+        
+        # Create tarball
+        tar -czvf "Modbus_PlexLink-$VERSION-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz" -C dist .
+    
+    - name: 📤 Upload Release Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-${{ matrix.platform }}-${{ matrix.arch }}
+        path: |
+          *.zip
+          *.tar.gz
+        retention-days: 7
+
+  # ============================================================================
+  # Create GitHub Release
+  # ============================================================================
+  create-release:
+    needs: build-release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    permissions:
+      contents: write
+    
+    steps:
+    - name: 📥 Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+        pattern: release-*
+        merge-multiple: true
+    
+    - name: 🚀 Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: artifacts/*
+        draft: false
+        prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+        generate_release_notes: true
+        body: |
+          ## 📦 Modbus PlexLink ${{ github.ref_name }}
+          
+          ### 下载 | Downloads
+          
+          | 平台 | 文件 |
+          |------|------|
+          | Windows x64 | `Modbus_PlexLink-*-Windows-x64.zip` |
+          | Linux x64 | `Modbus_PlexLink-*-Linux-x64.tar.gz` |
+          
+          ### 安装说明 | Installation
+          
+          **Windows:**
+          1. 下载并解压 zip 文件
+          2. 运行 `Modbus_PlexLink.exe`
+          
+          **Linux:**
+          ```bash
+          tar -xzvf Modbus_PlexLink-*-Linux-x64.tar.gz
+          chmod +x Modbus_PlexLink
+          ./Modbus_PlexLink
+          ```
+          
+          详细更新内容请查看 [CHANGELOG.md](CHANGELOG.md)

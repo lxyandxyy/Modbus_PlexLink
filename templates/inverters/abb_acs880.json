@@ -1,0 +1,171 @@
+{
+    "templateInfo": {
+        "id": "abb_acs880",
+        "name": "ABB ACS880 变频器",
+        "manufacturer": "ABB",
+        "model": "ACS880",
+        "category": "inverter",
+        "version": "1.0",
+        "author": "PlexLink Team",
+        "description": "ABB ACS880 系列工业变频器，支持 Modbus TCP/RTU",
+        "icon": "inverter"
+    },
+    "defaultConfig": {
+        "protocol": "modbus-tcp",
+        "port": 502,
+        "unitId": 1,
+        "pollRate": 500,
+        "timeout": 3000,
+        "byteOrder": "ABCD"
+    },
+    "mappings": [
+        {
+            "tagName": "Status_Word",
+            "registerType": "Holding",
+            "address": 1,
+            "dataType": "UInt16",
+            "byteOrder": "AB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "",
+            "description": "变频器状态字",
+            "group": "状态"
+        },
+        {
+            "tagName": "Running",
+            "registerType": "Coil",
+            "address": 0,
+            "dataType": "Bool",
+            "byteOrder": "AB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "",
+            "description": "运行状态",
+            "group": "状态"
+        },
+        {
+            "tagName": "Fault",
+            "registerType": "Coil",
+            "address": 1,
+            "dataType": "Bool",
+            "byteOrder": "AB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "",
+            "description": "故障状态",
+            "group": "状态"
+        },
+        {
+            "tagName": "Speed_Ref",
+            "registerType": "Holding",
+            "address": 2,
+            "dataType": "Int16",
+            "byteOrder": "AB",
+            "scale": 0.1,
+            "offset": 0,
+            "unit": "Hz",
+            "description": "频率设定值 (0.1Hz)",
+            "group": "设定值"
+        },
+        {
+            "tagName": "Speed_Act",
+            "registerType": "Holding",
+            "address": 3,
+            "dataType": "Int16",
+            "byteOrder": "AB",
+            "scale": 0.1,
+            "offset": 0,
+            "unit": "Hz",
+            "description": "实际输出频率 (0.1Hz)",
+            "group": "反馈值"
+        },
+        {
+            "tagName": "Current",
+            "registerType": "Holding",
+            "address": 4,
+            "dataType": "UInt16",
+            "byteOrder": "AB",
+            "scale": 0.1,
+            "offset": 0,
+            "unit": "A",
+            "description": "输出电流 (0.1A)",
+            "group": "反馈值"
+        },
+        {
+            "tagName": "Voltage",
+            "registerType": "Holding",
+            "address": 5,
+            "dataType": "UInt16",
+            "byteOrder": "AB",
+            "scale": 0.1,
+            "offset": 0,
+            "unit": "V",
+            "description": "输出电压 (0.1V)",
+            "group": "反馈值"
+        },
+        {
+            "tagName": "Power",
+            "registerType": "Holding",
+            "address": 6,
+            "dataType": "UInt16",
+            "byteOrder": "AB",
+            "scale": 0.1,
+            "offset": 0,
+            "unit": "kW",
+            "description": "输出功率 (0.1kW)",
+            "group": "反馈值"
+        },
+        {
+            "tagName": "Motor_Temp",
+            "registerType": "Holding",
+            "address": 7,
+            "dataType": "Int16",
+            "byteOrder": "AB",
+            "scale": 0.1,
+            "offset": 0,
+            "unit": "°C",
+            "description": "电机温度 (0.1°C)",
+            "group": "温度"
+        },
+        {
+            "tagName": "Inverter_Temp",
+            "registerType": "Holding",
+            "address": 8,
+            "dataType": "Int16",
+            "byteOrder": "AB",
+            "scale": 0.1,
+            "offset": 0,
+            "unit": "°C",
+            "description": "变频器温度 (0.1°C)",
+            "group": "温度"
+        },
+        {
+            "tagName": "Fault_Code",
+            "registerType": "Holding",
+            "address": 9,
+            "dataType": "UInt16",
+            "byteOrder": "AB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "",
+            "description": "故障代码",
+            "group": "故障"
+        },
+        {
+            "tagName": "Run_Hours",
+            "registerType": "Holding",
+            "address": 10,
+            "dataType": "UInt32",
+            "byteOrder": "ABCD",
+            "scale": 1,
+            "offset": 0,
+            "unit": "h",
+            "description": "累计运行时间",
+            "group": "统计"
+        }
+    ],
+    "documentation": {
+        "manualUrl": "https://new.abb.com/drives/",
+        "notes": "1. ACS880 需通过 Drive Composer 配置 Modbus 通讯\n2. 寄存器地址可通过参数映射自定义\n3. 状态字位定义请参考 ABB 手册\n4. 此模板为示例，实际地址需根据项目配置"
+    }
+}

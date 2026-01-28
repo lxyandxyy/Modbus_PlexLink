@@ -1,0 +1,111 @@
+{
+    "templateInfo": {
+        "id": "chint_ddsu666",
+        "name": "正泰 DDSU666 单相电能表",
+        "manufacturer": "正泰",
+        "model": "DDSU666",
+        "category": "power_meter",
+        "version": "1.0",
+        "author": "PlexLink Team",
+        "description": "单相导轨式电能表，适用于单相电能计量",
+        "icon": "power_meter"
+    },
+    "defaultConfig": {
+        "protocol": "modbus-tcp",
+        "port": 502,
+        "unitId": 1,
+        "pollRate": 1000,
+        "timeout": 3000,
+        "byteOrder": "ABCD"
+    },
+    "mappings": [
+        {
+            "tagName": "Voltage",
+            "registerType": "Holding",
+            "address": 0,
+            "dataType": "UInt16",
+            "byteOrder": "AB",
+            "scale": 0.1,
+            "offset": 0,
+            "unit": "V",
+            "description": "电压",
+            "group": "实时数据"
+        },
+        {
+            "tagName": "Current",
+            "registerType": "Holding",
+            "address": 1,
+            "dataType": "UInt16",
+            "byteOrder": "AB",
+            "scale": 0.01,
+            "offset": 0,
+            "unit": "A",
+            "description": "电流",
+            "group": "实时数据"
+        },
+        {
+            "tagName": "ActivePower",
+            "registerType": "Holding",
+            "address": 2,
+            "dataType": "Int16",
+            "byteOrder": "AB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "W",
+            "description": "有功功率",
+            "group": "实时数据"
+        },
+        {
+            "tagName": "ReactivePower",
+            "registerType": "Holding",
+            "address": 3,
+            "dataType": "Int16",
+            "byteOrder": "AB",
+            "scale": 1,
+            "offset": 0,
+            "unit": "Var",
+            "description": "无功功率",
+            "group": "实时数据"
+        },
+        {
+            "tagName": "PowerFactor",
+            "registerType": "Holding",
+            "address": 4,
+            "dataType": "Int16",
+            "byteOrder": "AB",
+            "scale": 0.001,
+            "offset": 0,
+            "unit": "",
+            "description": "功率因数",
+            "group": "实时数据"
+        },
+        {
+            "tagName": "Frequency",
+            "registerType": "Holding",
+            "address": 5,
+            "dataType": "UInt16",
+            "byteOrder": "AB",
+            "scale": 0.01,
+            "offset": 0,
+            "unit": "Hz",
+            "description": "频率",
+            "group": "实时数据"
+        },
+        {
+            "tagName": "TotalEnergy",
+            "registerType": "Holding",
+            "address": 8,
+            "dataType": "UInt32",
+            "byteOrder": "ABCD",
+            "scale": 0.01,
+            "offset": 0,
+            "unit": "kWh",
+            "description": "总有功电能",
+            "group": "电能"
+        }
+    ],
+    "documentation": {
+        "manualUrl": "https://www.chint.com/",
+        "notes": "1. 支持RS485通讯，默认9600,8,N,1\n2. 电压值需乘以0.1V\n3. 电流值需乘以0.01A"
+    }
+}

@@ -1,0 +1,308 @@
+{
+    "version": "1.1.0",
+    "description": "多通道配置示例 - 多个采集通道和多个虚拟服务",
+    "channels": [
+        {
+            "name": "ProductionLine1",
+            "enabled": true,
+            "description": "生产线1 - 包装机",
+            "collectors": [
+                {
+                    "name": "PackagingMachine",
+                    "protocol": "modbus-tcp",
+                    "ip": "192.168.1.101",
+                    "port": 502,
+                    "unitId": 1,
+                    "pollRate": 500,
+                    "timeout": 3000,
+                    "maxRetries": 3,
+                    "autoReconnect": true,
+                    "logErrors": true,
+                    "mappings": [
+                        {
+                            "tagName": "L1_Speed",
+                            "registerType": "Holding",
+                            "address": 0,
+                            "dataType": "UInt16",
+                            "byteOrder": "AB",
+                            "scale": 1,
+                            "offset": 0,
+                            "unit": "pcs/min",
+                            "comment": "生产速度",
+                            "enabled": true
+                        },
+                        {
+                            "tagName": "L1_Count",
+                            "registerType": "Holding",
+                            "address": 1,
+                            "dataType": "UInt32",
+                            "byteOrder": "ABCD",
+                            "scale": 1,
+                            "offset": 0,
+                            "unit": "pcs",
+                            "comment": "生产计数",
+                            "enabled": true
+                        },
+                        {
+                            "tagName": "L1_Status",
+                            "registerType": "Holding",
+                            "address": 3,
+                            "dataType": "UInt16",
+                            "byteOrder": "AB",
+                            "scale": 1,
+                            "offset": 0,
+                            "unit": "",
+                            "comment": "设备状态 0-停止 1-运行 2-故障",
+                            "enabled": true
+                        }
+                    ]
+                }
+            ],
+            "servers": []
+        },
+        {
+            "name": "ProductionLine2",
+            "enabled": true,
+            "description": "生产线2 - 灌装机",
+            "collectors": [
+                {
+                    "name": "FillingMachine",
+                    "protocol": "modbus-tcp",
+                    "ip": "192.168.1.102",
+                    "port": 502,
+                    "unitId": 1,
+                    "pollRate": 500,
+                    "timeout": 3000,
+                    "maxRetries": 3,
+                    "autoReconnect": true,
+                    "logErrors": true,
+                    "mappings": [
+                        {
+                            "tagName": "L2_Speed",
+                            "registerType": "Holding",
+                            "address": 0,
+                            "dataType": "UInt16",
+                            "byteOrder": "AB",
+                            "scale": 1,
+                            "offset": 0,
+                            "unit": "bottles/min",
+                            "comment": "灌装速度",
+                            "enabled": true
+                        },
+                        {
+                            "tagName": "L2_Count",
+                            "registerType": "Holding",
+                            "address": 1,
+                            "dataType": "UInt32",
+                            "byteOrder": "ABCD",
+                            "scale": 1,
+                            "offset": 0,
+                            "unit": "bottles",
+                            "comment": "灌装计数",
+                            "enabled": true
+                        },
+                        {
+                            "tagName": "L2_Status",
+                            "registerType": "Holding",
+                            "address": 3,
+                            "dataType": "UInt16",
+                            "byteOrder": "AB",
+                            "scale": 1,
+                            "offset": 0,
+                            "unit": "",
+                            "comment": "设备状态",
+                            "enabled": true
+                        },
+                        {
+                            "tagName": "L2_TankLevel",
+                            "registerType": "Holding",
+                            "address": 4,
+                            "dataType": "Float32",
+                            "byteOrder": "CDAB",
+                            "scale": 1,
+                            "offset": 0,
+                            "unit": "%",
+                            "comment": "料罐液位",
+                            "enabled": true
+                        }
+                    ]
+                }
+            ],
+            "servers": []
+        },
+        {
+            "name": "EnvironmentMonitor",
+            "enabled": true,
+            "description": "环境监测通道",
+            "collectors": [
+                {
+                    "name": "EnvSensors",
+                    "protocol": "modbus-tcp",
+                    "ip": "192.168.1.200",
+                    "port": 502,
+                    "unitId": 1,
+                    "pollRate": 5000,
+                    "timeout": 3000,
+                    "maxRetries": 3,
+                    "autoReconnect": true,
+                    "logErrors": true,
+                    "mappings": [
+                        {
+                            "tagName": "Env_Temperature",
+                            "registerType": "Holding",
+                            "address": 0,
+                            "dataType": "Int16",
+                            "byteOrder": "AB",
+                            "scale": 0.1,
+                            "offset": 0,
+                            "unit": "°C",
+                            "comment": "环境温度",
+                            "enabled": true
+                        },
+                        {
+                            "tagName": "Env_Humidity",
+                            "registerType": "Holding",
+                            "address": 1,
+                            "dataType": "UInt16",
+                            "byteOrder": "AB",
+                            "scale": 0.1,
+                            "offset": 0,
+                            "unit": "%RH",
+                            "comment": "环境湿度",
+                            "enabled": true
+                        }
+                    ]
+                }
+            ],
+            "servers": []
+        },
+        {
+            "name": "UnifiedServer",
+            "enabled": true,
+            "description": "统一数据服务通道 - 汇聚所有数据对外提供服务",
+            "collectors": [],
+            "servers": [
+                {
+                    "name": "MESInterface",
+                    "protocol": "modbus-tcp",
+                    "listenAddress": "0.0.0.0",
+                    "port": 1502,
+                    "maxClients": 10,
+                    "timeout": 1000,
+                    "enabled": true,
+                    "virtualDevices": [
+                        {
+                            "virtualUnitId": 1,
+                            "name": "Line1Data",
+                            "enabled": true,
+                            "mappings": [
+                                {
+                                    "tagName": "L1_Speed",
+                                    "registerType": "Holding",
+                                    "address": 0,
+                                    "dataType": "UInt16",
+                                    "byteOrder": "AB",
+                                    "scale": 1,
+                                    "offset": 0,
+                                    "writable": false,
+                                    "comment": "生产线1速度"
+                                },
+                                {
+                                    "tagName": "L1_Count",
+                                    "registerType": "Holding",
+                                    "address": 1,
+                                    "dataType": "UInt32",
+                                    "byteOrder": "ABCD",
+                                    "scale": 1,
+                                    "offset": 0,
+                                    "writable": false,
+                                    "comment": "生产线1计数"
+                                },
+                                {
+                                    "tagName": "L1_Status",
+                                    "registerType": "Holding",
+                                    "address": 3,
+                                    "dataType": "UInt16",
+                                    "byteOrder": "AB",
+                                    "scale": 1,
+                                    "offset": 0,
+                                    "writable": false,
+                                    "comment": "生产线1状态"
+                                }
+                            ]
+                        },
+                        {
+                            "virtualUnitId": 2,
+                            "name": "Line2Data",
+                            "enabled": true,
+                            "mappings": [
+                                {
+                                    "tagName": "L2_Speed",
+                                    "registerType": "Holding",
+                                    "address": 0,
+                                    "dataType": "UInt16",
+                                    "byteOrder": "AB",
+                                    "scale": 1,
+                                    "offset": 0,
+                                    "writable": false,
+                                    "comment": "生产线2速度"
+                                },
+                                {
+                                    "tagName": "L2_Count",
+                                    "registerType": "Holding",
+                                    "address": 1,
+                                    "dataType": "UInt32",
+                                    "byteOrder": "ABCD",
+                                    "scale": 1,
+                                    "offset": 0,
+                                    "writable": false,
+                                    "comment": "生产线2计数"
+                                },
+                                {
+                                    "tagName": "L2_TankLevel",
+                                    "registerType": "Holding",
+                                    "address": 3,
+                                    "dataType": "Float32",
+                                    "byteOrder": "CDAB",
+                                    "scale": 1,
+                                    "offset": 0,
+                                    "writable": false,
+                                    "comment": "生产线2液位"
+                                }
+                            ]
+                        },
+                        {
+                            "virtualUnitId": 10,
+                            "name": "EnvironmentData",
+                            "enabled": true,
+                            "mappings": [
+                                {
+                                    "tagName": "Env_Temperature",
+                                    "registerType": "Holding",
+                                    "address": 0,
+                                    "dataType": "Int16",
+                                    "byteOrder": "AB",
+                                    "scale": 10,
+                                    "offset": 0,
+                                    "writable": false,
+                                    "comment": "环境温度×10"
+                                },
+                                {
+                                    "tagName": "Env_Humidity",
+                                    "registerType": "Holding",
+                                    "address": 1,
+                                    "dataType": "UInt16",
+                                    "byteOrder": "AB",
+                                    "scale": 10,
+                                    "offset": 0,
+                                    "writable": false,
+                                    "comment": "环境湿度×10"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

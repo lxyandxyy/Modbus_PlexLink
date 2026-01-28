@@ -1,0 +1,187 @@
+{
+    "version": "1.1.0",
+    "description": "西门子 PLC 采集示例 - S7-1200/1500 Modbus TCP",
+    "channels": [
+        {
+            "name": "SiemensPLCChannel",
+            "enabled": true,
+            "description": "西门子 PLC 数据采集（需在PLC中配置Modbus TCP服务器）",
+            "collectors": [
+                {
+                    "name": "S7_1200_01",
+                    "protocol": "modbus-tcp",
+                    "ip": "192.168.0.1",
+                    "port": 502,
+                    "unitId": 1,
+                    "pollRate": 500,
+                    "timeout": 3000,
+                    "maxRetries": 3,
+                    "autoReconnect": true,
+                    "logErrors": true,
+                    "mappings": [
+                        {
+                            "tagName": "RunStatus",
+                            "registerType": "Coil",
+                            "address": 0,
+                            "dataType": "Bool",
+                            "byteOrder": "AB",
+                            "scale": 1,
+                            "offset": 0,
+                            "unit": "",
+                            "comment": "运行状态",
+                            "enabled": true
+                        },
+                        {
+                            "tagName": "AlarmStatus",
+                            "registerType": "Coil",
+                            "address": 1,
+                            "dataType": "Bool",
+                            "byteOrder": "AB",
+                            "scale": 1,
+                            "offset": 0,
+                            "unit": "",
+                            "comment": "报警状态",
+                            "enabled": true
+                        },
+                        {
+                            "tagName": "SpeedSetpoint",
+                            "registerType": "Holding",
+                            "address": 0,
+                            "dataType": "Int16",
+                            "byteOrder": "AB",
+                            "scale": 0.01,
+                            "offset": 0,
+                            "unit": "Hz",
+                            "comment": "速度设定值",
+                            "enabled": true
+                        },
+                        {
+                            "tagName": "SpeedFeedback",
+                            "registerType": "Holding",
+                            "address": 1,
+                            "dataType": "Int16",
+                            "byteOrder": "AB",
+                            "scale": 0.01,
+                            "offset": 0,
+                            "unit": "Hz",
+                            "comment": "速度反馈值",
+                            "enabled": true
+                        },
+                        {
+                            "tagName": "MotorCurrent",
+                            "registerType": "Holding",
+                            "address": 2,
+                            "dataType": "Float32",
+                            "byteOrder": "CDAB",
+                            "scale": 1,
+                            "offset": 0,
+                            "unit": "A",
+                            "comment": "电机电流（西门子常用CDAB字节序）",
+                            "enabled": true
+                        },
+                        {
+                            "tagName": "MotorTemperature",
+                            "registerType": "Holding",
+                            "address": 4,
+                            "dataType": "Float32",
+                            "byteOrder": "CDAB",
+                            "scale": 1,
+                            "offset": 0,
+                            "unit": "°C",
+                            "comment": "电机温度",
+                            "enabled": true
+                        },
+                        {
+                            "tagName": "ProductionCount",
+                            "registerType": "Holding",
+                            "address": 6,
+                            "dataType": "UInt32",
+                            "byteOrder": "CDAB",
+                            "scale": 1,
+                            "offset": 0,
+                            "unit": "pcs",
+                            "comment": "生产计数",
+                            "enabled": true
+                        },
+                        {
+                            "tagName": "RunningTime",
+                            "registerType": "Holding",
+                            "address": 8,
+                            "dataType": "UInt32",
+                            "byteOrder": "CDAB",
+                            "scale": 1,
+                            "offset": 0,
+                            "unit": "s",
+                            "comment": "运行时间",
+                            "enabled": true
+                        }
+                    ]
+                }
+            ],
+            "servers": [
+                {
+                    "name": "SCADAInterface",
+                    "protocol": "modbus-tcp",
+                    "listenAddress": "0.0.0.0",
+                    "port": 1502,
+                    "maxClients": 5,
+                    "timeout": 1000,
+                    "enabled": true,
+                    "virtualDevices": [
+                        {
+                            "virtualUnitId": 1,
+                            "name": "SCADA_Device",
+                            "enabled": true,
+                            "mappings": [
+                                {
+                                    "tagName": "RunStatus",
+                                    "registerType": "Coil",
+                                    "address": 0,
+                                    "dataType": "Bool",
+                                    "byteOrder": "AB",
+                                    "scale": 1,
+                                    "offset": 0,
+                                    "writable": true,
+                                    "comment": "运行状态（可写）"
+                                },
+                                {
+                                    "tagName": "SpeedSetpoint",
+                                    "registerType": "Holding",
+                                    "address": 0,
+                                    "dataType": "Int16",
+                                    "byteOrder": "AB",
+                                    "scale": 100,
+                                    "offset": 0,
+                                    "writable": true,
+                                    "comment": "速度设定×100"
+                                },
+                                {
+                                    "tagName": "SpeedFeedback",
+                                    "registerType": "Holding",
+                                    "address": 1,
+                                    "dataType": "Int16",
+                                    "byteOrder": "AB",
+                                    "scale": 100,
+                                    "offset": 0,
+                                    "writable": false,
+                                    "comment": "速度反馈×100"
+                                },
+                                {
+                                    "tagName": "ProductionCount",
+                                    "registerType": "Holding",
+                                    "address": 2,
+                                    "dataType": "UInt32",
+                                    "byteOrder": "ABCD",
+                                    "scale": 1,
+                                    "offset": 0,
+                                    "writable": false,
+                                    "comment": "生产计数"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

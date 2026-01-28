@@ -591,7 +591,7 @@ cmake --build . --config Release
 3. **📝 文档完善**：改进文档和示例
 4. **📦 设备适配**：贡献设备配置模板
 
-![联系方式](docs/images/微信.png)
+![联系方式](docs/images/微信.jpg)
 
 详细的贡献指南请参阅 [CONTRIBUTING.md](CONTRIBUTING.md)。
 

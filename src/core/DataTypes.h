@@ -139,6 +139,7 @@ struct CollectorMappingRule {
 // 服务端映射规则（增强版）
 struct ServerMappingRule {
     // 源变量配置
+    QString sourceChannel;        // 源通道名称（服务通道跨通道映射时使用，空表示本通道）
     QString sourceCollector;      // 源采集器名称（空表示任意采集器）
     QString sourceTagName;        // 源UDM标签名（采集器中的变量名）
     

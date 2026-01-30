@@ -17,9 +17,10 @@ namespace ModbusPlexLink {
 
 // 可用变量信息
 struct AvailableVariable {
-    QString collectorName;     // 采集器名称
+    QString sourceChannel;     // 源通道名称（服务通道映射时使用）
+    QString collectorName;     // 采集器名称（或 通道:采集器 格式）
     QString tagName;           // 标签名
-    QString fullId;            // 完整标识（采集器:标签名）
+    QString fullId;            // 完整标识（通道:采集器:标签名 或 采集器:标签名）
     DataType dataType;         // 数据类型
     QString comment;           // 注释
 };

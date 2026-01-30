@@ -3,6 +3,7 @@
 #include "ServerConfigDialog.h"
 #include "DataMonitorWidget.h"
 #include "DialogStyles.h"
+#include "utils/SystemVariableManager.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
@@ -185,8 +186,26 @@ void ChannelConfigDialog::createBasicInfoTab() {
     nameLabel->setStyleSheet("font-weight: 600; color: #374151; border: none; background: transparent;");
     formLayout->addRow(nameLabel, m_nameEdit);
     
+    // 通道类型选择
+    m_typeComboBox = new QComboBox(formCard);
+    m_typeComboBox->addItem(tr("📥 采集通道 - 采集下行设备数据"), static_cast<int>(ChannelType::Collector));
+    m_typeComboBox->addItem(tr("📤 服务/转发通道 - 对外提供数据服务"), static_cast<int>(ChannelType::Server));
+    m_typeComboBox->setStyleSheet("border: 1px solid #E2E8F0; border-radius: 8px; padding: 8px 14px; background: #F8FAFC;");
+    connect(m_typeComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &ChannelConfigDialog::onTypeChanged);
+    
+    QLabel* typeLabel = new QLabel(tr("通道类型 *"), formCard);
+    typeLabel->setStyleSheet("font-weight: 600; color: #374151; border: none; background: transparent;");
+    formLayout->addRow(typeLabel, m_typeComboBox);
+    
+    // 编辑模式下禁用类型选择
+    if (!m_isNewChannel) {
+        m_typeComboBox->setEnabled(false);
+        m_typeComboBox->setToolTip(tr("通道创建后类型不可更改"));
+    }
+    
     // 启用状态
-    m_enabledCheck = new QCheckBox(tr("启用此通道（启用后自动开始数据采集）"), formCard);
+    m_enabledCheck = new QCheckBox(tr("启用此通道（启用后自动开始数据采集/服务）"), formCard);
     m_enabledCheck->setChecked(true);
     m_enabledCheck->setStyleSheet("border: none; background: transparent; color: #475569;");
     QLabel* enableLabel = new QLabel(tr("启用状态"), formCard);
@@ -226,8 +245,8 @@ void ChannelConfigDialog::createBasicInfoTab() {
     hintLayout->addWidget(hintIcon);
     
     QLabel* hintLabel = new QLabel(
-        tr("通道是数据采集和转发的独立单元，每个通道拥有独立的数据缓存(UDM)。\n"
-           "采集器从设备读取数据写入UDM，服务器从UDM读取数据响应客户端。"),
+        tr("• 采集通道：配置采集器从下行设备读取数据，数据写入全局数据模型\n"
+           "• 服务通道：配置服务器从全局数据模型读取数据，对外提供Modbus服务"),
         hintCard);
     hintLabel->setWordWrap(true);
     hintLabel->setStyleSheet("color: #1E40AF; font-size: 10pt; border: none; background: transparent;");
@@ -618,6 +637,11 @@ void ChannelConfigDialog::loadConfig() {
         m_nameEdit->setEnabled(false);  // 编辑模式下不允许修改名称
         m_enabledCheck->setChecked(m_config.enabled);
         
+        // 加载通道类型
+        int typeIndex = (m_config.type == ChannelType::Server) ? 1 : 0;
+        m_typeComboBox->setCurrentIndex(typeIndex);
+        m_typeComboBox->setEnabled(false);  // 编辑模式下不允许修改类型
+        
         // 加载采集器和服务器配置
         m_collectors = m_config.collectors;
         m_servers = m_config.servers;
@@ -628,12 +652,21 @@ void ChannelConfigDialog::loadConfig() {
         m_nameEdit->setEnabled(false);  // 编辑模式下不允许修改名称
         m_enabledCheck->setChecked(m_config.enabled);
         
+        // 加载通道类型
+        int typeIndex = (m_config.type == ChannelType::Server) ? 1 : 0;
+        m_typeComboBox->setCurrentIndex(typeIndex);
+        m_typeComboBox->setEnabled(false);  // 编辑模式下不允许修改类型
+        
         // 加载采集器和服务器配置
         m_collectors = m_config.collectors;
         m_servers = m_config.servers;
     } else {
         // 新建通道，使用默认值
         m_config.enabled = true;
+        m_config.type = ChannelType::Collector;
+        
+        // 初始化Tab显示状态
+        onTypeChanged(0);
     }
     
     refreshCollectorTable();
@@ -650,29 +683,33 @@ bool ChannelConfigDialog::validateConfig() {
         return false;
     }
     
-    // 验证是否至少有一个采集器
-    if (m_collectors.isEmpty()) {
-        QMessageBox::StandardButton reply = QMessageBox::question(
-            this, tr("确认"),
-            tr("当前没有配置采集器，通道将无法采集数据。\n是否继续？"),
-            QMessageBox::Yes | QMessageBox::No);
-        
-        if (reply == QMessageBox::No) {
-            m_tabWidget->setCurrentIndex(1);
-            return false;
-        }
-    }
+    ChannelType type = static_cast<ChannelType>(m_typeComboBox->currentData().toInt());
     
-    // 验证是否至少有一个服务器
-    if (m_servers.isEmpty()) {
-        QMessageBox::StandardButton reply = QMessageBox::question(
-            this, tr("确认"),
-            tr("当前没有配置服务器，通道将无法对外提供数据。\n是否继续？"),
-            QMessageBox::Yes | QMessageBox::No);
-        
-        if (reply == QMessageBox::No) {
-            m_tabWidget->setCurrentIndex(2);
-            return false;
+    if (type == ChannelType::Collector) {
+        // 采集通道：验证是否至少有一个采集器
+        if (m_collectors.isEmpty()) {
+            QMessageBox::StandardButton reply = QMessageBox::question(
+                this, tr("确认"),
+                tr("采集通道没有配置采集器，通道将无法采集数据。\n是否继续？"),
+                QMessageBox::Yes | QMessageBox::No);
+            
+            if (reply == QMessageBox::No) {
+                m_tabWidget->setCurrentIndex(1);
+                return false;
+            }
+        }
+    } else {
+        // 服务通道：验证是否至少有一个服务器
+        if (m_servers.isEmpty()) {
+            QMessageBox::StandardButton reply = QMessageBox::question(
+                this, tr("确认"),
+                tr("服务通道没有配置服务器，通道将无法对外提供数据。\n是否继续？"),
+                QMessageBox::Yes | QMessageBox::No);
+            
+            if (reply == QMessageBox::No) {
+                m_tabWidget->setCurrentIndex(2);
+                return false;
+            }
         }
     }
     
@@ -682,9 +719,20 @@ bool ChannelConfigDialog::validateConfig() {
 ChannelConfig ChannelConfigDialog::getConfig() const {
     ChannelConfig config;
     config.name = m_nameEdit->text().trimmed();
+    config.type = static_cast<ChannelType>(m_typeComboBox->currentData().toInt());
     config.enabled = m_enabledCheck->isChecked();
-    config.collectors = m_collectors;
-    config.servers = m_servers;
+    config.description = m_descriptionEdit->toPlainText();
+    
+    // 根据通道类型只返回相应的配置
+    if (config.type == ChannelType::Collector) {
+        config.collectors = m_collectors;
+        // 服务通道配置清空
+        config.servers.clear();
+    } else {
+        config.servers = m_servers;
+        // 采集器配置清空
+        config.collectors.clear();
+    }
     return config;
 }
 
@@ -818,6 +866,26 @@ void ChannelConfigDialog::onNameChanged(const QString& text) {
     // 实时验证可以在这里添加
 }
 
+void ChannelConfigDialog::onTypeChanged(int index) {
+    Q_UNUSED(index);
+    ChannelType type = static_cast<ChannelType>(m_typeComboBox->currentData().toInt());
+    
+    // 根据类型显示/隐藏标签页
+    if (type == ChannelType::Collector) {
+        // 采集通道：显示采集器Tab，隐藏服务器Tab
+        m_tabWidget->setTabEnabled(1, true);   // 采集器Tab
+        m_tabWidget->setTabEnabled(2, false);  // 服务器Tab
+        m_tabWidget->setTabText(1, tr("📥 采集器"));
+        m_tabWidget->setTabText(2, tr("📤 服务器 (不适用)"));
+    } else {
+        // 服务通道：隐藏采集器Tab，显示服务器Tab
+        m_tabWidget->setTabEnabled(1, false);  // 采集器Tab
+        m_tabWidget->setTabEnabled(2, true);   // 服务器Tab
+        m_tabWidget->setTabText(1, tr("📥 采集器 (不适用)"));
+        m_tabWidget->setTabText(2, tr("📤 服务器"));
+    }
+}
+
 void ChannelConfigDialog::onAddCollector() {
     CollectorConfigDialog dialog(QJsonObject(), this);
     dialog.setWindowTitle(tr("新建采集器"));
@@ -909,26 +977,56 @@ void ChannelConfigDialog::onEditServer() {
 QList<AvailableVariable> ChannelConfigDialog::getAvailableVariables() const {
     QList<AvailableVariable> variables;
     
-    // 遍历所有采集器配置，提取变量
-    for (const QJsonObject& collectorConfig : m_collectors) {
-        QString collectorName = collectorConfig.value("name").toString();
-        QJsonArray mappings = collectorConfig.value("mappings").toArray();
+    // 获取当前选择的通道类型
+    ChannelType currentType = static_cast<ChannelType>(m_typeComboBox->currentData().toInt());
+    
+    if (currentType == ChannelType::Server) {
+        // 服务通道：从 SystemVariableManager 获取所有采集通道的变量
+        // 先同步变量（如果有通道管理器）
+        if (m_channelManager) {
+            SystemVariableManager::instance().syncFromChannels(m_channelManager);
+        }
         
-        for (const QJsonValue& mappingVal : mappings) {
-            QJsonObject mapping = mappingVal.toObject();
-            
+        // 获取所有系统变量
+        QList<SystemVariable> sysVars = SystemVariableManager::instance().getAllVariables();
+        for (const SystemVariable& sysVar : sysVars) {
             AvailableVariable var;
-            var.collectorName = collectorName;
-            var.tagName = mapping.value("tagName").toString();
-            var.fullId = QString("%1:%2").arg(collectorName).arg(var.tagName);
-            var.comment = mapping.value("comment").toString();
+            var.collectorName = QString("%1:%2").arg(sysVar.sourceChannel, sysVar.sourceCollector);
+            var.tagName = sysVar.variableName;
+            var.fullId = sysVar.fullId;  // 格式: 通道:采集器:变量名
+            var.comment = sysVar.comment;
+            var.dataType = sysVar.dataType;
             
-            // 解析数据类型
-            QString dataTypeStr = mapping.value("dataType").toString("UInt16");
-            var.dataType = DataTypeUtils::dataTypeFromString(dataTypeStr);
+            variables.append(var);
+        }
+        
+        if (variables.isEmpty()) {
+            qWarning() << "[ChannelConfigDialog] 服务通道：未找到可用的系统变量，请先创建采集通道";
+        } else {
+            qDebug() << "[ChannelConfigDialog] 服务通道：获取到" << variables.size() << "个系统变量";
+        }
+    } else {
+        // 采集通道：从当前通道的采集器配置中获取变量（用于本通道内的引用）
+        for (const QJsonObject& collectorConfig : m_collectors) {
+            QString collectorName = collectorConfig.value("name").toString();
+            QJsonArray mappings = collectorConfig.value("mappings").toArray();
             
-            if (!var.tagName.isEmpty()) {
-                variables.append(var);
+            for (const QJsonValue& mappingVal : mappings) {
+                QJsonObject mapping = mappingVal.toObject();
+                
+                AvailableVariable var;
+                var.collectorName = collectorName;
+                var.tagName = mapping.value("tagName").toString();
+                var.fullId = QString("%1:%2").arg(collectorName).arg(var.tagName);
+                var.comment = mapping.value("comment").toString();
+                
+                // 解析数据类型
+                QString dataTypeStr = mapping.value("dataType").toString("UInt16");
+                var.dataType = DataTypeUtils::dataTypeFromString(dataTypeStr);
+                
+                if (!var.tagName.isEmpty()) {
+                    variables.append(var);
+                }
             }
         }
     }

@@ -92,31 +92,31 @@ endif()
 # ============================================================================
 
 # Core sources (shared between GUI and Service)
-file(GLOB CORE_SOURCES
+file(GLOB CORE_SOURCES CONFIGURE_DEPENDS
     src/core/*.cpp
     src/core/*.h
 )
 
 # Adapter sources (shared)
-file(GLOB ADAPTER_SOURCES
+file(GLOB ADAPTER_SOURCES CONFIGURE_DEPENDS
     src/adapters/*.cpp
     src/adapters/*.h
 )
 
 # Utils sources (shared)
-file(GLOB UTILS_SOURCES
+file(GLOB UTILS_SOURCES CONFIGURE_DEPENDS
     src/utils/*.cpp
     src/utils/*.h
 )
 
 # Remote API sources (shared)
-file(GLOB REMOTE_SOURCES
+file(GLOB REMOTE_SOURCES CONFIGURE_DEPENDS
     src/remote/*.cpp
     src/remote/*.h
 )
 
 # GUI sources (only for GUI app)
-file(GLOB GUI_SOURCES
+file(GLOB GUI_SOURCES CONFIGURE_DEPENDS
     src/gui/*.cpp
     src/gui/*.h
 )

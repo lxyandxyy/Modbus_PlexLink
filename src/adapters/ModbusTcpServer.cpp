@@ -1,5 +1,6 @@
 #include "ModbusTcpServer.h"
 #include "core/UniversalDataModel.h"
+#include "core/GlobalDataModel.h"
 #include <QDebug>
 #include <QJsonArray>
 #include <QElapsedTimer>
@@ -627,8 +628,24 @@ bool ModbusTcpServer::readFromUDM(int virtualUnitId, RegisterType type, int addr
             continue;
         }
         
-        // 从UDM读取数据
-        DataPoint dp = m_udm->readPoint(mapping->tagName);
+        // 从数据源读取数据
+        DataPoint dp;
+        
+        if (!mapping->sourceChannel.isEmpty()) {
+            // 跨通道映射：从 GlobalDataModel 读取
+            // 构建完整的标签名: 通道:采集器:变量名
+            QString fullTagName = QString("%1:%2:%3")
+                .arg(mapping->sourceChannel)
+                .arg(mapping->sourceCollector)
+                .arg(mapping->sourceTagName);
+            dp = GlobalDataModel::instance().readPoint(fullTagName);
+        } else {
+            // 本通道映射：从本地 UDM 读取
+            // 优先使用 sourceTagName，如果为空则使用 tagName
+            QString tagName = mapping->sourceTagName.isEmpty() ? 
+                              mapping->tagName : mapping->sourceTagName;
+            dp = m_udm->readPoint(tagName);
+        }
         
         if (!dp.isValid()) {
             // 数据无效，填充0

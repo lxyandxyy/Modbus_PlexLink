@@ -123,10 +123,11 @@ QJsonObject ChannelManager::getConfig() const {
         
         QJsonObject channelConfig;
         channelConfig["name"] = channelCfg.name;
+        channelConfig["type"] = (channelCfg.type == ChannelType::Server) ? "server" : "collector";
         channelConfig["enabled"] = channelCfg.enabled;
         channelConfig["description"] = channelCfg.description;
         
-        // 保存采集器配置
+        // 保存采集器配置（仅采集通道）
         QJsonArray collectorsArray;
         for (const QJsonObject& collector : channelCfg.collectors) {
             collectorsArray.append(collector);

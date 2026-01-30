@@ -19,13 +19,20 @@ enum class ChannelState {
     Error       // 错误状态
 };
 
+// 通道类型枚举
+enum class ChannelType {
+    Collector,  // 采集通道：只包含采集器，负责采集下行设备数据
+    Server      // 服务/转发通道：只包含服务器，从全局数据模型中选变量做映射
+};
+
 // 通道配置结构
 struct ChannelConfig {
     QString name;                       // 通道名称
+    ChannelType type = ChannelType::Collector;  // 通道类型（默认采集通道）
     bool enabled = true;                // 是否启用
     QString description;                // 通道描述
-    QList<QJsonObject> collectors;      // 采集器配置列表（包含mappings）
-    QList<QJsonObject> servers;         // 服务器配置列表（包含virtualDevices）
+    QList<QJsonObject> collectors;      // 采集器配置列表（仅采集通道使用）
+    QList<QJsonObject> servers;         // 服务器配置列表（仅服务通道使用）
     QJsonObject virtualization;         // 虚拟化配置（兼容旧格式）
 };
 
@@ -51,6 +58,9 @@ public:
     
     // 获取通道名称
     QString getName() const;
+    
+    // 获取通道类型
+    ChannelType getType() const;
     
     // 获取通道状态
     ChannelState getState() const;
@@ -146,6 +156,7 @@ private:
     
 private:
     QString m_name;                             // 通道名称
+    ChannelType m_type;                         // 通道类型
     ChannelState m_state;                       // 通道状态
     std::unique_ptr<UniversalDataModel> m_udm;  // UDM实例
     QList<ICollector*> m_collectors;            // 采集器列表

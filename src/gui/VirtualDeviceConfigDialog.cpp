@@ -752,7 +752,7 @@ void VirtualDeviceConfigDialog::onAddFromVariable() {
     // 变量列表
     QTableWidget* varTable = new QTableWidget(&selectDialog);
     varTable->setColumnCount(4);
-    varTable->setHorizontalHeaderLabels({tr("采集器"), tr("标签名"), tr("数据类型"), tr("注释")});
+    varTable->setHorizontalHeaderLabels({tr("数据源"), tr("标签名"), tr("数据类型"), tr("注释")});
     varTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     varTable->setSelectionMode(QAbstractItemView::ExtendedSelection);
     varTable->horizontalHeader()->setStretchLastSection(true);
@@ -760,6 +760,7 @@ void VirtualDeviceConfigDialog::onAddFromVariable() {
     
     for (int i = 0; i < m_availableVariables.size(); ++i) {
         const AvailableVariable& var = m_availableVariables[i];
+        // 显示完整的数据源信息（通道:采集器 或 仅采集器）
         varTable->setItem(i, 0, new QTableWidgetItem(var.collectorName));
         varTable->setItem(i, 1, new QTableWidgetItem(var.tagName));
         varTable->setItem(i, 2, new QTableWidgetItem(DataTypeUtils::dataTypeToString(var.dataType)));
@@ -807,8 +808,29 @@ void VirtualDeviceConfigDialog::onAddFromVariable() {
             const AvailableVariable& var = m_availableVariables[row];
             
             ServerMappingRule rule;
-            rule.sourceCollector = var.collectorName;
-            rule.sourceTagName = var.tagName;
+            
+            // 解析 fullId 获取源信息
+            // fullId 格式可能是：
+            // - "通道:采集器:变量名" （服务通道跨通道映射）
+            // - "采集器:变量名" （采集通道本地映射）
+            QStringList parts = var.fullId.split(':');
+            if (parts.size() >= 3) {
+                // 格式: 通道:采集器:变量名
+                rule.sourceChannel = parts[0];
+                rule.sourceCollector = parts[1];
+                rule.sourceTagName = parts.mid(2).join(':');  // 变量名可能包含冒号
+            } else if (parts.size() == 2) {
+                // 格式: 采集器:变量名
+                rule.sourceChannel = "";  // 本通道
+                rule.sourceCollector = parts[0];
+                rule.sourceTagName = parts[1];
+            } else {
+                // 单一变量名
+                rule.sourceChannel = "";
+                rule.sourceCollector = var.collectorName;
+                rule.sourceTagName = var.tagName;
+            }
+            
             rule.tagName = var.tagName;
             rule.comment = var.comment;
             rule.dataType = var.dataType;  // 默认使用源数据类型

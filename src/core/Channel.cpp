@@ -1,4 +1,5 @@
 #include "Channel.h"
+#include "GlobalDataModel.h"
 #include "adapters/ModbusTcpCollector.h"
 #include "adapters/ModbusRtuCollector.h"
 #include "adapters/ModbusTcpServer.h"
@@ -11,6 +12,7 @@ namespace ModbusPlexLink {
 Channel::Channel(const QString& name, QObject *parent)
     : QObject(parent)
     , m_name(name)
+    , m_type(ChannelType::Collector)  // 默认采集通道
     , m_state(ChannelState::Stopped)
     , m_udm(std::make_unique<UniversalDataModel>())
 {
@@ -31,23 +33,37 @@ bool Channel::configure(const ChannelConfig& config) {
     }
     
     m_config = config;
+    m_type = config.type;  // 设置通道类型
     
     // 清理旧的采集器和服务器
     cleanup();
     
-    // 创建采集器（配置中包含mappings）
-    for (const QJsonObject& collectorConfig : config.collectors) {
-        ICollector* collector = createCollector(collectorConfig);
-        if (collector) {
-            addCollector(collector);  // 使用addCollector确保信号正确连接
+    // 根据通道类型创建组件
+    if (m_type == ChannelType::Collector) {
+        // 采集通道：只创建采集器
+        for (const QJsonObject& collectorConfig : config.collectors) {
+            ICollector* collector = createCollector(collectorConfig);
+            if (collector) {
+                addCollector(collector);
+            }
         }
-    }
-    
-    // 创建服务器（配置中包含virtualDevices）
-    for (const QJsonObject& serverConfig : config.servers) {
-        IServer* server = createServer(serverConfig);
-        if (server) {
-            addServer(server);  // 使用addServer确保信号正确连接
+        
+        // 警告：采集通道不应该有服务器配置
+        if (!config.servers.isEmpty()) {
+            qWarning() << "Channel" << m_name << "is a Collector channel but has server configs - ignoring servers";
+        }
+    } else {
+        // 服务通道：只创建服务器
+        for (const QJsonObject& serverConfig : config.servers) {
+            IServer* server = createServer(serverConfig);
+            if (server) {
+                addServer(server);
+            }
+        }
+        
+        // 警告：服务通道不应该有采集器配置
+        if (!config.collectors.isEmpty()) {
+            qWarning() << "Channel" << m_name << "is a Server channel but has collector configs - ignoring collectors";
         }
     }
     
@@ -59,6 +75,15 @@ bool Channel::configure(const QJsonObject& config) {
     
     // 解析通道名称
     channelConfig.name = config["name"].toString(m_name);
+    
+    // 解析通道类型（默认采集通道，兼容旧配置）
+    QString typeStr = config["type"].toString("collector");
+    if (typeStr.compare("server", Qt::CaseInsensitive) == 0 ||
+        typeStr.compare("forward", Qt::CaseInsensitive) == 0) {
+        channelConfig.type = ChannelType::Server;
+    } else {
+        channelConfig.type = ChannelType::Collector;
+    }
     
     // 解析是否启用
     channelConfig.enabled = config["enabled"].toBool(true);
@@ -160,6 +185,10 @@ QString Channel::getName() const {
     return m_name;
 }
 
+ChannelType Channel::getType() const {
+    return m_type;
+}
+
 ChannelState Channel::getState() const {
     return m_state;
 }
@@ -227,6 +256,21 @@ bool Channel::addCollector(ICollector* collector) {
                 emit modbusMessage(collector->getName(), direction, device,
                                  function, address, data, success);
             });
+    
+    // 采集通道：将采集器数据同步到全局数据模型
+    if (m_type == ChannelType::Collector) {
+        connect(collector, &ICollector::dataCollected,
+                this, [this, collector](const QString& tagName, const QVariant& value) {
+                    // 创建数据点并写入全局数据模型
+                    DataPoint point(value, DataQuality::Good);
+                    GlobalDataModel::instance().updatePoint(
+                        m_name,                    // 通道名
+                        collector->getName(),      // 采集器名
+                        tagName,                   // 变量名
+                        point
+                    );
+                });
+    }
     
     m_collectors.append(collector);
     
@@ -323,6 +367,7 @@ ChannelConfig Channel::getConfig() const {
 QJsonObject Channel::getStatistics() const {
     QJsonObject stats;
     stats["name"] = m_name;
+    stats["type"] = (m_type == ChannelType::Collector) ? "collector" : "server";
     stats["state"] = static_cast<int>(m_state);
     stats["dataPointCount"] = m_udm->size();
     

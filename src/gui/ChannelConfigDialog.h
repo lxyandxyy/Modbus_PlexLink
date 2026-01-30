@@ -9,6 +9,7 @@
 #include <QTableWidget>
 #include <QPushButton>
 #include <QLabel>
+#include <QComboBox>
 #include "core/Channel.h"
 #include "core/DataTypes.h"
 #include "VirtualDeviceConfigDialog.h"
@@ -57,6 +58,7 @@ public:
 private slots:
     // 基本信息
     void onNameChanged(const QString& text);
+    void onTypeChanged(int index);
     
     // 采集器操作
     void onAddCollector();
@@ -109,6 +111,7 @@ private:
     
     // === Tab 1: 基本信息 ===
     QLineEdit* m_nameEdit;
+    QComboBox* m_typeComboBox;      // 通道类型选择
     QCheckBox* m_enabledCheck;
     QTextEdit* m_descriptionEdit;
     

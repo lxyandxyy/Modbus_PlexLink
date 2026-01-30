@@ -29,6 +29,7 @@ add_executable(test_channel test_channel.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Channel.cpp
     ${CMAKE_SOURCE_DIR}/src/core/UniversalDataModel.cpp
     ${CMAKE_SOURCE_DIR}/src/core/DataTypes.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/GlobalDataModel.cpp
     ${CMAKE_SOURCE_DIR}/src/adapters/interfaces.cpp
     ${CMAKE_SOURCE_DIR}/src/adapters/ModbusTcpCollector.cpp
     ${CMAKE_SOURCE_DIR}/src/adapters/ModbusTcpServer.cpp
@@ -91,6 +92,7 @@ add_executable(test_modbus_server test_modbus_server.cpp
     ${CMAKE_SOURCE_DIR}/src/adapters/ModbusTcpServer.cpp
     ${CMAKE_SOURCE_DIR}/src/core/UniversalDataModel.cpp
     ${CMAKE_SOURCE_DIR}/src/core/DataTypes.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/GlobalDataModel.cpp
     ${CMAKE_SOURCE_DIR}/src/core/DataPoint.h
     ${CMAKE_SOURCE_DIR}/src/adapters/interfaces.h
 )
@@ -138,6 +140,7 @@ add_executable(test_integration test_integration.cpp
     ${CMAKE_SOURCE_DIR}/src/core/ChannelManager.cpp
     ${CMAKE_SOURCE_DIR}/src/core/UniversalDataModel.cpp
     ${CMAKE_SOURCE_DIR}/src/core/DataTypes.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/GlobalDataModel.cpp
     ${CMAKE_SOURCE_DIR}/src/adapters/interfaces.cpp
     ${CMAKE_SOURCE_DIR}/src/adapters/ModbusTcpCollector.cpp
     ${CMAKE_SOURCE_DIR}/src/adapters/ModbusTcpServer.cpp

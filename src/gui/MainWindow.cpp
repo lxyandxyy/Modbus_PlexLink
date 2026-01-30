@@ -30,7 +30,9 @@
 
 #include "AlarmWidget.h"
 #include "AppSettingsDialog.h"
+#include "BatchChannelWizard.h"
 #include "ChannelCardWidget.h"
+#include "SystemVariableManagerDialog.h"
 #include "ChannelConfigDialog.h"
 #include "DashboardDataWidget.h"
 #include "LogViewerWidget.h"
@@ -840,8 +842,14 @@ void MainWindow::createActions() {
     m_newChannelAction = new QAction(tr("➕ 新建通道"), this);
     m_newChannelAction->setShortcut(QKeySequence::New);
     m_newChannelAction->setStatusTip(tr("创建新的采集转发通道"));
-  connect(m_newChannelAction, &QAction::triggered, this,
-          &MainWindow::onNewChannel);
+    connect(m_newChannelAction, &QAction::triggered, this,
+            &MainWindow::onNewChannel);
+    
+    m_batchCreateAction = new QAction(tr("📦 批量创建"), this);
+    m_batchCreateAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_N));
+    m_batchCreateAction->setStatusTip(tr("批量创建多个通道"));
+    connect(m_batchCreateAction, &QAction::triggered, this,
+            &MainWindow::onBatchCreateChannels);
     
     m_loadConfigAction = new QAction(tr("📂 打开"), this);
     m_loadConfigAction->setShortcut(QKeySequence::Open);
@@ -922,6 +930,12 @@ void MainWindow::createActions() {
   connect(m_waveformRecorderAction, &QAction::triggered, this,
           &MainWindow::onShowWaveformRecorder);
     
+    m_systemVariableAction = new QAction(tr("📊 系统变量"), this);
+    m_systemVariableAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_V));
+    m_systemVariableAction->setStatusTip(tr("查看和管理系统变量"));
+    connect(m_systemVariableAction, &QAction::triggered, this,
+            &MainWindow::onShowSystemVariables);
+    
     // 设置 - 自动启动选项
     QAction* autoStartAction = new QAction(tr("启动时自动运行所有通道"), this);
     autoStartAction->setCheckable(true);
@@ -979,6 +993,7 @@ void MainWindow::createToolBar() {
     
     // 文件操作
     toolBar->addAction(m_newChannelAction);
+    toolBar->addAction(m_batchCreateAction);
     toolBar->addAction(m_loadConfigAction);
     toolBar->addAction(m_saveConfigAction);
     toolBar->addSeparator();
@@ -992,6 +1007,7 @@ void MainWindow::createToolBar() {
     toolBar->addAction(m_logViewerAction);
     toolBar->addAction(m_alarmManagerAction);
     toolBar->addAction(m_waveformRecorderAction);
+    toolBar->addAction(m_systemVariableAction);
     toolBar->addSeparator();
     
     // 远程连接
@@ -1447,6 +1463,24 @@ void MainWindow::onNewChannel() {
             this, tr("错误"),
                 tr("创建通道失败：通道名称 '%1' 已存在").arg(config.name));
       }
+        }
+    }
+}
+
+void MainWindow::onBatchCreateChannels() {
+    if (m_isRemoteMode) {
+        QMessageBox::information(this, tr("提示"), 
+            tr("批量创建功能仅支持本地模式"));
+        return;
+    }
+    
+    BatchChannelWizard wizard(m_channelManager, this);
+    if (wizard.exec() == QDialog::Accepted) {
+        int created = wizard.getCreatedCount();
+        if (created > 0) {
+            m_configModified = true;
+            statusBar()->showMessage(tr("已批量创建 %1 个通道").arg(created), 5000);
+            updateChannelTable();
         }
     }
 }
@@ -1968,6 +2002,11 @@ void MainWindow::onShowWaveformRecorder() {
     m_waveformRecorder->show();
     m_waveformRecorder->raise();
     m_waveformRecorder->activateWindow();
+}
+
+void MainWindow::onShowSystemVariables() {
+    SystemVariableManagerDialog dialog(m_channelManager, this);
+    dialog.exec();
 }
 
 void MainWindow::onAlarmTriggered(const AlarmEvent& event) {

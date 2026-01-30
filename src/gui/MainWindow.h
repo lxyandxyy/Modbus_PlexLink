@@ -91,6 +91,7 @@ public:
 private slots:
     // 文件菜单
     void onNewChannel();
+    void onBatchCreateChannels();
     void onLoadConfig();
     void onSaveConfig();
     void onSaveConfigAs();
@@ -112,6 +113,7 @@ private slots:
     void onShowLogViewer();
     void onShowAlarmManager();
     void onShowWaveformRecorder();
+    void onShowSystemVariables();
     void onAlarmTriggered(const AlarmEvent& event);
     void onPlaybackAlarmRecording(const QString& csvFilePath, const AlarmRecordingData& recordingData);
     
@@ -208,6 +210,7 @@ private:
     
     // 菜单和工具栏动作
     QAction* m_newChannelAction;
+    QAction* m_batchCreateAction;
     QAction* m_loadConfigAction;
     QAction* m_saveConfigAction;
     QAction* m_saveConfigAsAction;
@@ -224,6 +227,7 @@ private:
     QAction* m_logViewerAction;
     QAction* m_alarmManagerAction;
     QAction* m_waveformRecorderAction;
+    QAction* m_systemVariableAction;
     
     // 远程连接动作
     QAction* m_connectRemoteAction;

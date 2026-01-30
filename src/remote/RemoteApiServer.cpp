@@ -310,6 +310,61 @@ RemoteApiServer::RemoteApiServer(ChannelManager* channelManager,
             connectChannelSignals(channel);
         }
     }
+    
+    // 连接告警管理器的信号，用于实时推送告警事件
+    if (m_alarmManager) {
+        connect(m_alarmManager, &AlarmManager::alarmTriggered, this, 
+            [this](const AlarmEvent& event) {
+                QJsonObject data;
+                data["action"] = "triggered";
+                data["id"] = event.id;
+                data["ruleId"] = event.ruleId;
+                data["ruleName"] = event.ruleName;
+                data["channelName"] = event.channelName;
+                data["tagName"] = event.tagName;
+                data["value"] = QJsonValue::fromVariant(event.value);
+                data["message"] = event.message;
+                data["type"] = static_cast<int>(event.type);
+                data["priority"] = static_cast<int>(event.priority);
+                data["state"] = static_cast<int>(event.state);
+                data["activeTime"] = event.activeTime.toString(Qt::ISODate);
+                data["hasRecording"] = event.hasRecording;
+                broadcastToSubscribers("alarms", data);
+                qDebug() << "[RemoteApiServer] 告警推送: triggered" << event.ruleName;
+            });
+        
+        connect(m_alarmManager, &AlarmManager::alarmAcknowledged, this,
+            [this](const QString& eventId) {
+                AlarmEvent event = m_alarmManager->getAlarmEvent(eventId);
+                QJsonObject data;
+                data["action"] = "acknowledged";
+                data["id"] = eventId;
+                data["acknowledgedTime"] = event.acknowledgedTime.toString(Qt::ISODate);
+                data["acknowledgedBy"] = event.acknowledgedBy;
+                broadcastToSubscribers("alarms", data);
+                qDebug() << "[RemoteApiServer] 告警推送: acknowledged" << eventId;
+            });
+        
+        connect(m_alarmManager, &AlarmManager::alarmCleared, this,
+            [this](const QString& eventId) {
+                QJsonObject data;
+                data["action"] = "cleared";
+                data["id"] = eventId;
+                data["clearedTime"] = QDateTime::currentDateTime().toString(Qt::ISODate);
+                broadcastToSubscribers("alarms", data);
+                qDebug() << "[RemoteApiServer] 告警推送: cleared" << eventId;
+            });
+        
+        connect(m_alarmManager, &AlarmManager::recordingCompleted, this,
+            [this](const QString& alarmEventId, const QString& csvFilePath) {
+                QJsonObject data;
+                data["action"] = "recordingCompleted";
+                data["id"] = alarmEventId;
+                data["csvFilePath"] = csvFilePath;
+                broadcastToSubscribers("alarms", data);
+                qDebug() << "[RemoteApiServer] 告警推送: recordingCompleted" << alarmEventId;
+            });
+    }
 }
 
 RemoteApiServer::~RemoteApiServer() {
@@ -509,6 +564,10 @@ void RemoteApiServer::handleHttpRequest(const HttpRequest& request, HttpConnecti
     else if (matchRoute("/api/channels/:name/servers", path, params) && method == "POST") {
         response = handleAddServer(params[0], bodyJson);
     }
+    // 获取所有可用标签（用于录波界面添加通道）
+    else if (path == "/api/tags" && method == "GET") {
+        response = handleGetAllTags();
+    }
     // 数据访问
     else if (matchRoute("/api/data/:channel", path, params) && method == "GET") {
         response = handleGetData(params[0]);
@@ -523,8 +582,42 @@ void RemoteApiServer::handleHttpRequest(const HttpRequest& request, HttpConnecti
     else if (path == "/api/alarms" && method == "GET") {
         response = handleGetAlarms();
     }
+    else if (matchRoute("/api/alarms/history", path, params) && method == "GET") {
+        response = handleGetAlarmHistory(request.queryParams);
+    }
     else if (matchRoute("/api/alarms/:id/ack", path, params) && method == "POST") {
         response = handleAcknowledgeAlarm(params[0]);
+    }
+    else if (matchRoute("/api/alarms/:id/clear", path, params) && method == "POST") {
+        response = handleClearAlarm(params[0]);
+    }
+    else if (matchRoute("/api/alarms/:id/recording", path, params) && method == "GET") {
+        response = handleGetAlarmRecording(params[0]);
+    }
+    // 录波列表API
+    else if (matchRoute("/api/alarm-recordings", path, params) && method == "GET") {
+        response = handleGetAlarmRecordings();
+    }
+    // 告警规则API
+    else if (matchRoute("/api/alarm-rules", path, params) && method == "GET") {
+        response = handleGetAlarmRules();
+    }
+    else if (matchRoute("/api/alarm-rules", path, params) && method == "POST") {
+        QJsonDocument doc = QJsonDocument::fromJson(request.body);
+        response = handleAddAlarmRule(doc.object());
+    }
+    else if (matchRoute("/api/alarm-rules/:id", path, params) && method == "PUT") {
+        QJsonDocument doc = QJsonDocument::fromJson(request.body);
+        response = handleUpdateAlarmRule(params[0], doc.object());
+    }
+    else if (matchRoute("/api/alarm-rules/:id", path, params) && method == "DELETE") {
+        response = handleDeleteAlarmRule(params[0]);
+    }
+    else if (matchRoute("/api/alarm-rules/:id/enable", path, params) && method == "POST") {
+        response = handleEnableAlarmRule(params[0], true);
+    }
+    else if (matchRoute("/api/alarm-rules/:id/disable", path, params) && method == "POST") {
+        response = handleEnableAlarmRule(params[0], false);
     }
     // 404
     else {
@@ -678,6 +771,13 @@ HttpResponse RemoteApiServer::handleCreateChannel(const QJsonObject& body) {
         }
     }
     
+    // 保存配置到文件（持久化）
+    if (!m_channelManager->saveConfig("channels.json")) {
+        qWarning() << "[RemoteApiServer] 警告：配置保存失败，下次重启可能丢失更改";
+    } else {
+        qInfo() << "[RemoteApiServer] 通道配置已保存:" << name;
+    }
+    
     response.setSuccess(QString("Channel created: %1").arg(name));
     return response;
 }
@@ -741,6 +841,13 @@ HttpResponse RemoteApiServer::handleUpdateChannel(const QString& name, const QJs
         }
     }
     
+    // 保存配置到文件（持久化）
+    if (!m_channelManager->saveConfig("channels.json")) {
+        qWarning() << "[RemoteApiServer] 警告：配置保存失败，下次重启可能丢失更改";
+    } else {
+        qInfo() << "[RemoteApiServer] 通道配置已保存:" << name;
+    }
+    
     response.setSuccess(QString("Channel updated: %1").arg(name));
     return response;
 }
@@ -754,6 +861,8 @@ HttpResponse RemoteApiServer::handleDeleteChannel(const QString& name) {
     }
     
     if (m_channelManager->deleteChannel(name)) {
+        // 保存配置到文件（持久化）
+        m_channelManager->saveConfig("channels.json");
         response.setSuccess(QString("Channel deleted: %1").arg(name));
     } else {
         response.setError(500, "Failed to delete channel");
@@ -902,6 +1011,37 @@ HttpResponse RemoteApiServer::handleAddServer(const QString& channelName, const 
     } else {
         response.setError(500, "Failed to add server");
     }
+    return response;
+}
+
+HttpResponse RemoteApiServer::handleGetAllTags() {
+    HttpResponse response;
+    QJsonArray allTags;
+    QSet<QString> tagSet; // 用于去重
+    
+    for (const QString& channelName : m_channelManager->getChannelNames()) {
+        Channel* channel = m_channelManager->getChannel(channelName);
+        if (!channel) continue;
+        
+        UniversalDataModel* udm = channel->getDataModel();
+        if (udm) {
+            for (const QString& tag : udm->getAllTags()) {
+                if (!tagSet.contains(tag)) {
+                    tagSet.insert(tag);
+                    QJsonObject tagInfo;
+                    tagInfo["name"] = tag;
+                    tagInfo["channel"] = channelName;
+                    allTags.append(tagInfo);
+                }
+            }
+        }
+    }
+    
+    QJsonObject result;
+    result["success"] = true;
+    result["tags"] = allTags;
+    result["count"] = allTags.size();
+    response.setJson(result);
     return response;
 }
 
@@ -1100,6 +1240,267 @@ HttpResponse RemoteApiServer::handleAcknowledgeAlarm(const QString& alarmId) {
     } else {
         response.setError(404, QString("Alarm not found: %1").arg(alarmId));
     }
+    return response;
+}
+
+HttpResponse RemoteApiServer::handleGetAlarmHistory(const QMap<QString, QString>& queryParams) {
+    HttpResponse response;
+    
+    if (!m_alarmManager) {
+        response.setError(500, "Alarm manager not available");
+        return response;
+    }
+    
+    // 解析查询参数
+    int days = queryParams.value("days", "7").toInt();
+    int limit = queryParams.value("limit", "1000").toInt();
+    
+    QDateTime endTime = QDateTime::currentDateTime();
+    QDateTime startTime = endTime.addDays(-days);
+    
+    QList<AlarmEvent> history = m_alarmManager->getAlarmHistory(startTime, endTime);
+    
+    QJsonArray alarms;
+    int count = 0;
+    for (const AlarmEvent& event : history) {
+        if (count >= limit) break;
+        
+        QJsonObject alarm;
+        alarm["id"] = event.id;
+        alarm["ruleId"] = event.ruleId;
+        alarm["ruleName"] = event.ruleName;
+        alarm["channelName"] = event.channelName;
+        alarm["tagName"] = event.tagName;
+        alarm["value"] = QJsonValue::fromVariant(event.value);
+        alarm["message"] = event.message;
+        alarm["type"] = static_cast<int>(event.type);
+        alarm["priority"] = static_cast<int>(event.priority);
+        alarm["state"] = static_cast<int>(event.state);
+        alarm["activeTime"] = event.activeTime.toString(Qt::ISODate);
+        alarm["acknowledgedTime"] = event.acknowledgedTime.isValid() ? 
+            event.acknowledgedTime.toString(Qt::ISODate) : QString();
+        alarm["clearedTime"] = event.clearedTime.isValid() ? 
+            event.clearedTime.toString(Qt::ISODate) : QString();
+        alarm["acknowledgedBy"] = event.acknowledgedBy;
+        alarm["hasRecording"] = event.hasRecording;
+        alarm["recordingFilePath"] = event.recordingFilePath;
+        alarms.append(alarm);
+        count++;
+    }
+    
+    QJsonObject result;
+    result["success"] = true;
+    result["alarms"] = alarms;
+    result["count"] = alarms.size();
+    result["days"] = days;
+    response.setJson(result);
+    return response;
+}
+
+HttpResponse RemoteApiServer::handleGetAlarmRules() {
+    HttpResponse response;
+    
+    if (!m_alarmManager) {
+        response.setError(500, "Alarm manager not available");
+        return response;
+    }
+    
+    QJsonArray rules;
+    for (const AlarmRule& rule : m_alarmManager->getAllRules()) {
+        rules.append(rule.toJson());
+    }
+    
+    QJsonObject result;
+    result["success"] = true;
+    result["rules"] = rules;
+    result["count"] = rules.size();
+    response.setJson(result);
+    return response;
+}
+
+HttpResponse RemoteApiServer::handleAddAlarmRule(const QJsonObject& body) {
+    HttpResponse response;
+    
+    if (!m_alarmManager) {
+        response.setError(500, "Alarm manager not available");
+        return response;
+    }
+    
+    AlarmRule rule = AlarmRule::fromJson(body);
+    QString ruleId = m_alarmManager->addRule(rule);
+    
+    if (!ruleId.isEmpty()) {
+        QJsonObject result;
+        result["success"] = true;
+        result["ruleId"] = ruleId;
+        result["message"] = "Alarm rule added successfully";
+        response.setJson(result);
+    } else {
+        response.setError(400, "Failed to add alarm rule");
+    }
+    return response;
+}
+
+HttpResponse RemoteApiServer::handleUpdateAlarmRule(const QString& ruleId, const QJsonObject& body) {
+    HttpResponse response;
+    
+    if (!m_alarmManager) {
+        response.setError(500, "Alarm manager not available");
+        return response;
+    }
+    
+    AlarmRule rule = AlarmRule::fromJson(body);
+    if (m_alarmManager->updateRule(ruleId, rule)) {
+        response.setSuccess("Alarm rule updated successfully");
+    } else {
+        response.setError(404, QString("Alarm rule not found: %1").arg(ruleId));
+    }
+    return response;
+}
+
+HttpResponse RemoteApiServer::handleDeleteAlarmRule(const QString& ruleId) {
+    HttpResponse response;
+    
+    if (!m_alarmManager) {
+        response.setError(500, "Alarm manager not available");
+        return response;
+    }
+    
+    if (m_alarmManager->removeRule(ruleId)) {
+        response.setSuccess("Alarm rule deleted successfully");
+    } else {
+        response.setError(404, QString("Alarm rule not found: %1").arg(ruleId));
+    }
+    return response;
+}
+
+HttpResponse RemoteApiServer::handleEnableAlarmRule(const QString& ruleId, bool enable) {
+    HttpResponse response;
+    
+    if (!m_alarmManager) {
+        response.setError(500, "Alarm manager not available");
+        return response;
+    }
+    
+    if (m_alarmManager->enableRule(ruleId, enable)) {
+        response.setSuccess(QString("Alarm rule %1").arg(enable ? "enabled" : "disabled"));
+    } else {
+        response.setError(404, QString("Alarm rule not found: %1").arg(ruleId));
+    }
+    return response;
+}
+
+HttpResponse RemoteApiServer::handleClearAlarm(const QString& alarmId) {
+    HttpResponse response;
+    
+    if (!m_alarmManager) {
+        response.setError(500, "Alarm manager not available");
+        return response;
+    }
+    
+    if (m_alarmManager->clearAlarm(alarmId)) {
+        response.setSuccess(QString("Alarm cleared: %1").arg(alarmId));
+    } else {
+        response.setError(404, QString("Alarm not found: %1").arg(alarmId));
+    }
+    return response;
+}
+
+HttpResponse RemoteApiServer::handleGetAlarmRecording(const QString& alarmId) {
+    HttpResponse response;
+    
+    if (!m_alarmManager) {
+        response.setError(500, "Alarm manager not available");
+        return response;
+    }
+    
+    AlarmRecordingData data = m_alarmManager->getRecordingData(alarmId);
+    
+    if (data.data.isEmpty() && data.csvFilePath.isEmpty()) {
+        response.setError(404, QString("Recording not found for alarm: %1").arg(alarmId));
+        return response;
+    }
+    
+    QJsonObject result;
+    result["success"] = true;
+    result["alarmEventId"] = data.alarmEventId;
+    result["startTime"] = data.startTime.toString(Qt::ISODate);
+    result["endTime"] = data.endTime.isValid() ? data.endTime.toString(Qt::ISODate) : QString();
+    result["totalDataPoints"] = data.totalDataPoints;
+    result["csvFilePath"] = data.csvFilePath;
+    result["isComplete"] = data.isComplete;
+    
+    QJsonArray tags;
+    for (const QString& tag : data.recordedTags) {
+        tags.append(tag);
+    }
+    result["recordedTags"] = tags;
+    
+    // 如果数据量不大，直接返回数据
+    if (data.data.size() <= 1000) {
+        QJsonArray dataPoints;
+        for (const auto& point : data.data) {
+            QJsonObject dp;
+            dp["timestamp"] = point.timestamp;
+            QJsonObject values;
+            for (auto it = point.values.begin(); it != point.values.end(); ++it) {
+                values[it.key()] = it.value();
+            }
+            dp["values"] = values;
+            dataPoints.append(dp);
+        }
+        result["data"] = dataPoints;
+    } else {
+        result["dataAvailable"] = true;
+        result["message"] = "Data too large, use CSV export";
+    }
+    
+    response.setJson(result);
+    return response;
+}
+
+HttpResponse RemoteApiServer::handleGetAlarmRecordings() {
+    HttpResponse response;
+    
+    if (!m_alarmManager) {
+        response.setError(500, "Alarm manager not available");
+        return response;
+    }
+    
+    QList<AlarmEvent> alarmsWithRecording = m_alarmManager->getAlarmsWithRecording();
+    
+    QJsonArray recordings;
+    for (const AlarmEvent& event : alarmsWithRecording) {
+        AlarmRecordingData data = m_alarmManager->getRecordingData(event.id);
+        
+        QJsonObject rec;
+        rec["alarmEventId"] = event.id;
+        rec["ruleName"] = event.ruleName;
+        rec["channelName"] = event.channelName;
+        rec["tagName"] = event.tagName;
+        rec["message"] = event.message;
+        rec["priority"] = static_cast<int>(event.priority);
+        rec["startTime"] = data.startTime.toString(Qt::ISODate);
+        rec["endTime"] = data.endTime.isValid() ? data.endTime.toString(Qt::ISODate) : QString();
+        rec["totalDataPoints"] = data.totalDataPoints;
+        rec["csvFilePath"] = data.csvFilePath;
+        rec["isComplete"] = data.isComplete;
+        
+        QJsonArray tags;
+        for (const QString& tag : data.recordedTags) {
+            tags.append(tag);
+        }
+        rec["recordedTags"] = tags;
+        
+        recordings.append(rec);
+    }
+    
+    QJsonObject result;
+    result["success"] = true;
+    result["recordings"] = recordings;
+    result["count"] = recordings.size();
+    
+    response.setJson(result);
     return response;
 }
 

@@ -48,6 +48,9 @@ public:
     // 获取所有通道
     void getChannels();
     
+    // 获取所有可用标签（用于录波添加通道）
+    void getAllTags();
+    
     // 获取单个通道详情
     void getChannel(const QString& name);
     
@@ -102,7 +105,20 @@ public:
     // ========== 报警管理 API ==========
     
     void getAlarms();
+    void getAlarmHistory(int days = 7, int limit = 1000);
     void acknowledgeAlarm(const QString& alarmId);
+    void clearAlarm(const QString& alarmId);
+    
+    // 告警规则管理
+    void getAlarmRules();
+    void addAlarmRule(const QJsonObject& rule);
+    void updateAlarmRule(const QString& ruleId, const QJsonObject& rule);
+    void deleteAlarmRule(const QString& ruleId);
+    void enableAlarmRule(const QString& ruleId, bool enable);
+    
+    // 告警录波
+    void getAlarmRecording(const QString& alarmId);
+    void getAlarmRecordings();
     
     // ========== WebSocket订阅 ==========
     
@@ -124,6 +140,7 @@ signals:
     
     // API响应
     void channelsReceived(const QJsonArray& channels);
+    void allTagsReceived(const QJsonArray& tags);
     void channelReceived(const QJsonObject& channel);
     void channelCreated(const QString& name, bool success);
     void channelUpdated(const QString& name, bool success);
@@ -151,7 +168,20 @@ signals:
     void statisticsReceived(const QJsonObject& statistics);
     
     void alarmsReceived(const QJsonArray& alarms);
+    void alarmHistoryReceived(const QJsonArray& alarms, int days);
     void alarmAcknowledged(const QString& alarmId, bool success);
+    void alarmCleared(const QString& alarmId, bool success);
+    
+    // 告警规则信号
+    void alarmRulesReceived(const QJsonArray& rules);
+    void alarmRuleAdded(const QString& ruleId, bool success);
+    void alarmRuleUpdated(const QString& ruleId, bool success);
+    void alarmRuleDeleted(const QString& ruleId, bool success);
+    void alarmRuleEnabled(const QString& ruleId, bool enabled, bool success);
+    
+    // 告警录波信号
+    void alarmRecordingReceived(const QString& alarmId, const QJsonObject& recording);
+    void alarmRecordingsReceived(const QJsonArray& recordings);
     
     // 实时推送
     void realtimeDataReceived(const QString& channelName, const QJsonObject& data);

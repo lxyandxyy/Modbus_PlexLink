@@ -1,4 +1,5 @@
 #include "AlarmManager.h"
+#include "AlarmDatabase.h"
 #include "core/ChannelManager.h"
 #include "core/Channel.h"
 #include "core/UniversalDataModel.h"
@@ -8,6 +9,7 @@
 #include <QDebug>
 #include <QTextStream>
 #include <QStringConverter>
+#include <QStandardPaths>
 
 namespace ModbusPlexLink {
 
@@ -111,6 +113,18 @@ AlarmManager::AlarmManager(ChannelManager* channelManager, QObject *parent)
     if (!m_channelManager) {
         qWarning() << "AlarmManager: ChannelManager is null!";
         return;
+    }
+    
+    // 初始化告警数据库
+    QString dbPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    if (dbPath.isEmpty()) {
+        dbPath = ".";
+    }
+    QString alarmDbFile = dbPath + "/alarms.db";
+    if (!AlarmDatabase::instance().initialize(alarmDbFile)) {
+        qWarning() << "[AlarmManager] 告警数据库初始化失败，历史告警将不会持久化";
+    } else {
+        qInfo() << "[AlarmManager] 告警数据库已初始化:" << alarmDbFile;
     }
     
     // 初始化录波采样定时器（用于告警触发后的录波）
@@ -293,6 +307,12 @@ QList<AlarmEvent> AlarmManager::getActiveAlarms() const {
 }
 
 QList<AlarmEvent> AlarmManager::getAlarmHistory(const QDateTime& start, const QDateTime& end) const {
+    // 优先从数据库查询
+    if (AlarmDatabase::instance().isInitialized()) {
+        return AlarmDatabase::instance().getAlarmHistory(start, end);
+    }
+    
+    // 数据库不可用时，从内存查询（兼容旧逻辑）
     QMutexLocker locker(&m_alarmsMutex);
 
     QList<AlarmEvent> filtered;
@@ -328,6 +348,7 @@ AlarmEvent AlarmManager::getAlarmEvent(const QString& eventId) const {
 bool AlarmManager::acknowledgeAlarm(const QString& eventId, const QString& acknowledgedBy) {
     bool found = false;
     QString ackBy;
+    AlarmEvent updatedEvent;
 
     // 在锁内修改状态
     {
@@ -339,14 +360,20 @@ bool AlarmManager::acknowledgeAlarm(const QString& eventId, const QString& ackno
                 m_activeAlarms[i].acknowledgedTime = QDateTime::currentDateTime();
                 m_activeAlarms[i].acknowledgedBy = acknowledgedBy.isEmpty() ? tr("用户") : acknowledgedBy;
                 ackBy = m_activeAlarms[i].acknowledgedBy;
+                updatedEvent = m_activeAlarms[i];
                 found = true;
                 break;
             }
         }
     }
 
-    // 在锁外发射信号
+    // 在锁外发射信号和更新数据库
     if (found) {
+        // 更新数据库
+        if (AlarmDatabase::instance().isInitialized()) {
+            AlarmDatabase::instance().updateAlarmEvent(updatedEvent);
+        }
+        
         emit alarmAcknowledged(eventId);
         qInfo() << "[AlarmManager] 报警已确认:" << eventId << "by" << ackBy;
     }
@@ -356,6 +383,7 @@ bool AlarmManager::acknowledgeAlarm(const QString& eventId, const QString& ackno
 
 bool AlarmManager::clearAlarm(const QString& eventId) {
     bool found = false;
+    AlarmEvent clearedEvent;
 
     // 在锁内执行清除操作
     {
@@ -365,8 +393,9 @@ bool AlarmManager::clearAlarm(const QString& eventId) {
             if (m_activeAlarms[i].id == eventId) {
                 m_activeAlarms[i].state = AlarmState::Cleared;
                 m_activeAlarms[i].clearedTime = QDateTime::currentDateTime();
+                clearedEvent = m_activeAlarms[i];
 
-                // 移到历史
+                // 移到内存历史（兼容）
                 m_alarmHistory.prepend(m_activeAlarms[i]);
                 if (m_alarmHistory.size() > m_maxHistorySize) {
                     m_alarmHistory.removeLast();
@@ -379,8 +408,13 @@ bool AlarmManager::clearAlarm(const QString& eventId) {
         }
     }
 
-    // 在锁外发射信号
+    // 在锁外发射信号和更新数据库
     if (found) {
+        // 更新数据库
+        if (AlarmDatabase::instance().isInitialized()) {
+            AlarmDatabase::instance().updateAlarmEvent(clearedEvent);
+        }
+        
         emit alarmCleared(eventId);
         qInfo() << "[AlarmManager] 报警已清除:" << eventId;
     }
@@ -585,6 +619,11 @@ void AlarmManager::triggerAlarm(const AlarmRule& rule,
         m_activeAlarms.append(event);
         m_activeAlarmsMap[rule.id] = event;
     }
+    
+    // 持久化到数据库
+    if (AlarmDatabase::instance().isInitialized()) {
+        AlarmDatabase::instance().insertAlarmEvent(event);
+    }
 
     // 在锁外发射信号，避免死锁
     emit alarmTriggered(event);
@@ -602,6 +641,7 @@ void AlarmManager::autoClearAlarm(const QString& ruleId) {
 
     QString eventId;
     bool hasRecording = false;
+    AlarmEvent clearedEvent;
 
     // 在锁内执行清除操作
     {
@@ -616,8 +656,9 @@ void AlarmManager::autoClearAlarm(const QString& ruleId) {
             if (m_activeAlarms[i].id == eventId) {
                 m_activeAlarms[i].state = AlarmState::Cleared;
                 m_activeAlarms[i].clearedTime = QDateTime::currentDateTime();
+                clearedEvent = m_activeAlarms[i];
 
-                // 移到历史
+                // 移到内存历史（兼容）
                 m_alarmHistory.prepend(m_activeAlarms[i]);
                 if (m_alarmHistory.size() > m_maxHistorySize) {
                     m_alarmHistory.removeLast();
@@ -634,6 +675,11 @@ void AlarmManager::autoClearAlarm(const QString& ruleId) {
     // 如果有录波，停止录波
     if (hasRecording && m_activeSessions.contains(eventId)) {
         stopRecordingForAlarm(eventId);
+    }
+    
+    // 更新数据库
+    if (AlarmDatabase::instance().isInitialized() && !clearedEvent.id.isEmpty()) {
+        AlarmDatabase::instance().updateAlarmEvent(clearedEvent);
     }
 
     // 在锁外发射信号
@@ -1008,6 +1054,9 @@ void AlarmManager::stopRecordingForAlarm(const QString& alarmEventId) {
     // 先保存到内存，这样后续导出可以正常工作
     m_completedRecordings[alarmEventId] = recording;
     
+    AlarmEvent eventToUpdate;
+    bool needUpdateDb = false;
+    
     // 自动导出CSV
     if (session.config.autoExportCsv) {
         QString saveDir = session.config.saveDirectory.isEmpty() 
@@ -1030,16 +1079,25 @@ void AlarmManager::stopRecordingForAlarm(const QString& alarmEventId) {
             for (AlarmEvent& event : m_activeAlarms) {
                 if (event.id == alarmEventId) {
                     event.recordingFilePath = filename;
+                    eventToUpdate = event;
+                    needUpdateDb = true;
                     break;
                 }
             }
             for (AlarmEvent& event : m_alarmHistory) {
                 if (event.id == alarmEventId) {
                     event.recordingFilePath = filename;
+                    eventToUpdate = event;
+                    needUpdateDb = true;
                     break;
                 }
             }
         }
+    }
+    
+    // 更新数据库中的录波文件路径
+    if (needUpdateDb && AlarmDatabase::instance().isInitialized()) {
+        AlarmDatabase::instance().updateAlarmEvent(eventToUpdate);
     }
     
     // 如果不保留在内存中，导出后删除

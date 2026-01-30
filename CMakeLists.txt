@@ -7,11 +7,12 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-# Find required Qt6 components (including WebSockets for remote API)
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Network Concurrent WebSockets PrintSupport)
+# Find required Qt6 components (including WebSockets for remote API, Sql for alarm database)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Network Concurrent WebSockets PrintSupport Sql)
 
 message(STATUS "Qt6 Concurrent found: ${Qt6Concurrent_FOUND}")
 message(STATUS "Qt6 WebSockets found: ${Qt6WebSockets_FOUND}")
+message(STATUS "Qt6 Sql found: ${Qt6Sql_FOUND}")
 
 # Set third party directory
 set(THIRD_PARTY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty)
@@ -165,6 +166,7 @@ target_link_libraries(${PROJECT_NAME}
     Qt6::Concurrent
     Qt6::WebSockets
     Qt6::PrintSupport
+    Qt6::Sql
     ${MODBUS_LIBRARY}
 )
 
@@ -189,6 +191,7 @@ target_link_libraries(${PROJECT_NAME}_Service
     Qt6::Network
     Qt6::Concurrent
     Qt6::WebSockets
+    Qt6::Sql
     ${MODBUS_LIBRARY}
 )
 

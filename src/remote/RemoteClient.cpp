@@ -169,6 +169,9 @@ void RemoteClient::handleResponse(QNetworkReply* reply, const QString& methodAnd
     if (endpoint == "/api/channels" && method == "GET") {
         emit channelsReceived(response["channels"].toArray());
     }
+    else if (endpoint == "/api/tags" && method == "GET") {
+        emit allTagsReceived(response["tags"].toArray());
+    }
     else if (endpoint == "/api/channels" && method == "POST") {
         // 创建通道
         QString name = response["message"].toString();  // 响应中包含通道名
@@ -237,6 +240,49 @@ void RemoteClient::handleResponse(QNetworkReply* reply, const QString& methodAnd
     else if (endpoint == "/api/alarms") {
         emit alarmsReceived(response["alarms"].toArray());
     }
+    else if (endpoint.startsWith("/api/alarms/history")) {
+        int days = response["days"].toInt(7);
+        emit alarmHistoryReceived(response["alarms"].toArray(), days);
+    }
+    else if (endpoint.startsWith("/api/alarms/") && endpoint.endsWith("/ack")) {
+        QString alarmId = endpoint.split('/').value(3);
+        emit alarmAcknowledged(alarmId, success);
+    }
+    else if (endpoint.startsWith("/api/alarms/") && endpoint.endsWith("/clear")) {
+        QString alarmId = endpoint.split('/').value(3);
+        emit alarmCleared(alarmId, success);
+    }
+    else if (endpoint.startsWith("/api/alarms/") && endpoint.endsWith("/recording")) {
+        QString alarmId = endpoint.split('/').value(3);
+        emit alarmRecordingReceived(alarmId, response);
+    }
+    else if (endpoint == "/api/alarm-recordings" && method == "GET") {
+        emit alarmRecordingsReceived(response["recordings"].toArray());
+    }
+    // 告警规则响应
+    else if (endpoint == "/api/alarm-rules" && method == "GET") {
+        emit alarmRulesReceived(response["rules"].toArray());
+    }
+    else if (endpoint == "/api/alarm-rules" && method == "POST") {
+        QString ruleId = response["ruleId"].toString();
+        emit alarmRuleAdded(ruleId, success);
+    }
+    else if (endpoint.startsWith("/api/alarm-rules/") && method == "PUT") {
+        QString ruleId = endpoint.split('/').last();
+        emit alarmRuleUpdated(ruleId, success);
+    }
+    else if (endpoint.startsWith("/api/alarm-rules/") && method == "DELETE") {
+        QString ruleId = endpoint.split('/').last();
+        emit alarmRuleDeleted(ruleId, success);
+    }
+    else if (endpoint.startsWith("/api/alarm-rules/") && endpoint.endsWith("/enable")) {
+        QString ruleId = endpoint.split('/').value(3);
+        emit alarmRuleEnabled(ruleId, true, success);
+    }
+    else if (endpoint.startsWith("/api/alarm-rules/") && endpoint.endsWith("/disable")) {
+        QString ruleId = endpoint.split('/').value(3);
+        emit alarmRuleEnabled(ruleId, false, success);
+    }
 }
 
 // ============================================================================
@@ -245,6 +291,10 @@ void RemoteClient::handleResponse(QNetworkReply* reply, const QString& methodAnd
 
 void RemoteClient::getChannels() {
     get("/api/channels");
+}
+
+void RemoteClient::getAllTags() {
+    get("/api/tags");
 }
 
 void RemoteClient::getChannel(const QString& name) {
@@ -363,8 +413,48 @@ void RemoteClient::getAlarms() {
     get("/api/alarms");
 }
 
+void RemoteClient::getAlarmHistory(int days, int limit) {
+    get(QString("/api/alarms/history?days=%1&limit=%2").arg(days).arg(limit));
+}
+
 void RemoteClient::acknowledgeAlarm(const QString& alarmId) {
     post(QString("/api/alarms/%1/ack").arg(alarmId));
+}
+
+void RemoteClient::clearAlarm(const QString& alarmId) {
+    post(QString("/api/alarms/%1/clear").arg(alarmId));
+}
+
+void RemoteClient::getAlarmRules() {
+    get("/api/alarm-rules");
+}
+
+void RemoteClient::addAlarmRule(const QJsonObject& rule) {
+    post("/api/alarm-rules", rule);
+}
+
+void RemoteClient::updateAlarmRule(const QString& ruleId, const QJsonObject& rule) {
+    put(QString("/api/alarm-rules/%1").arg(ruleId), rule);
+}
+
+void RemoteClient::deleteAlarmRule(const QString& ruleId) {
+    del(QString("/api/alarm-rules/%1").arg(ruleId));
+}
+
+void RemoteClient::enableAlarmRule(const QString& ruleId, bool enable) {
+    if (enable) {
+        post(QString("/api/alarm-rules/%1/enable").arg(ruleId));
+    } else {
+        post(QString("/api/alarm-rules/%1/disable").arg(ruleId));
+    }
+}
+
+void RemoteClient::getAlarmRecording(const QString& alarmId) {
+    get(QString("/api/alarms/%1/recording").arg(alarmId));
+}
+
+void RemoteClient::getAlarmRecordings() {
+    get("/api/alarm-recordings");
 }
 
 // ============================================================================

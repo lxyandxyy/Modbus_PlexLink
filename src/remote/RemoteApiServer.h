@@ -188,6 +188,7 @@ private:
     HttpResponse handleGetServers(const QString& channelName);
     HttpResponse handleAddServer(const QString& channelName, const QJsonObject& body);
     
+    HttpResponse handleGetAllTags();
     HttpResponse handleGetData(const QString& channelName);
     HttpResponse handleGetDataPoint(const QString& channelName, const QString& tagName);
     HttpResponse handleWriteDataPoint(const QString& channelName, const QString& tagName, const QJsonObject& body);
@@ -198,8 +199,19 @@ private:
     HttpResponse handleLoadConfig(const QString& filename);
     
     HttpResponse handleGetStatistics();
+    
+    // 告警管理API
     HttpResponse handleGetAlarms();
+    HttpResponse handleGetAlarmHistory(const QMap<QString, QString>& queryParams);
+    HttpResponse handleGetAlarmRules();
+    HttpResponse handleAddAlarmRule(const QJsonObject& body);
+    HttpResponse handleUpdateAlarmRule(const QString& ruleId, const QJsonObject& body);
+    HttpResponse handleDeleteAlarmRule(const QString& ruleId);
+    HttpResponse handleEnableAlarmRule(const QString& ruleId, bool enable);
     HttpResponse handleAcknowledgeAlarm(const QString& alarmId);
+    HttpResponse handleClearAlarm(const QString& alarmId);
+    HttpResponse handleGetAlarmRecording(const QString& alarmId);
+    HttpResponse handleGetAlarmRecordings();
     
     HttpResponse handleGetSystemInfo();
     

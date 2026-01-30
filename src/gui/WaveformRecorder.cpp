@@ -36,6 +36,8 @@
 #include <QVBoxLayout>
 
 #include "../core/UniversalDataModel.h"
+#include "ModeStatusBanner.h"
+#include "remote/RemoteClient.h"
 #include "qcustomplot.h"
 
 using namespace ModbusPlexLink;
@@ -56,6 +58,9 @@ const QList<QColor> WaveformRecorderWidget::s_defaultColors = {
 
 WaveformRecorderWidget::WaveformRecorderWidget(QWidget* parent)
     : QWidget(parent),
+      m_modeStatusBanner(nullptr),
+      m_isRemoteMode(false),
+      m_remoteClient(nullptr),
       m_dataModel(nullptr),
       m_sampleTimer(new QTimer(this)),
       m_playbackTimer(new QTimer(this)),
@@ -93,6 +98,10 @@ void WaveformRecorderWidget::setupUi() {
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
+    
+    // 模式状态Banner
+    m_modeStatusBanner = new ModeStatusBanner(this);
+    mainLayout->addWidget(m_modeStatusBanner);
 
     // 工具栏
     setupToolBar();
@@ -306,6 +315,10 @@ void WaveformRecorderWidget::setupChannelTable() {
 
     connect(m_channelTable, &QTableWidget::cellChanged, this,
             &WaveformRecorderWidget::onChannelTableChanged);
+    
+    // 连接选择变化信号以更新删除按钮状态
+    connect(m_channelTable, &QTableWidget::itemSelectionChanged, this,
+            &WaveformRecorderWidget::updateButtonStates);
 }
 
 void WaveformRecorderWidget::setupPlot() {
@@ -529,6 +542,12 @@ void WaveformRecorderWidget::setDataModel(UniversalDataModel* model) {
 }
 
 QStringList WaveformRecorderWidget::getAvailableTags() const {
+    if (m_isRemoteMode) {
+        // 远程模式：使用缓存的远程标签
+        return m_remoteAvailableTags;
+    }
+    
+    // 本地模式：从数据模型获取
     if (!m_dataModel) {
         return QStringList();
     }
@@ -699,15 +718,30 @@ void WaveformRecorderWidget::startRecording() {
         return;
     }
 
-    if (!m_dataModel) {
-        QMessageBox::warning(this, tr("警告"), tr("未设置数据模型！"));
-        return;
+    // 检查数据源
+    if (m_isRemoteMode) {
+        if (!m_remoteClient) {
+            QMessageBox::warning(this, tr("警告"), tr("远程模式下未设置远程客户端！"));
+            return;
+        }
+        // 订阅远程数据
+        m_remoteClient->subscribeToData();
+        qDebug() << "[WaveformRecorder] 远程模式：已订阅数据推送";
+    } else {
+        if (!m_dataModel) {
+            QMessageBox::warning(this, tr("警告"), tr("未设置数据模型！"));
+            return;
+        }
     }
 
     m_state = RecorderState::Recording;
     m_triggerState = TriggerState::Idle;
     m_elapsedTimer.start();
-    m_sampleTimer->start(m_sampleIntervalMs);
+    
+    // 本地模式使用定时器采样，远程模式依赖推送
+    if (!m_isRemoteMode) {
+        m_sampleTimer->start(m_sampleIntervalMs);
+    }
 
     updateButtonStates();
     updateStatusBar();
@@ -715,7 +749,8 @@ void WaveformRecorderWidget::startRecording() {
     emit recordingStarted();
 
     qDebug() << "[WaveformRecorder] Recording started. Channels:"
-             << m_channels.size() << "Interval:" << m_sampleIntervalMs << "ms";
+             << m_channels.size() << "Interval:" << m_sampleIntervalMs << "ms"
+             << (m_isRemoteMode ? "(远程模式)" : "(本地模式)");
 }
 
 void WaveformRecorderWidget::stopRecording() {
@@ -1257,6 +1292,36 @@ void WaveformRecorderWidget::stopPlayback() {
     emit playbackStopped();
 }
 
+void WaveformRecorderWidget::resetToIdleMode() {
+    // 停止所有活动
+    if (m_state == RecorderState::Playback) {
+        stopPlayback();
+    } else if (m_state == RecorderState::Recording || 
+               m_state == RecorderState::WaitingTrigger) {
+        stopRecording();
+    }
+    
+    // 清空回放数据
+    m_playbackData.clear();
+    m_totalPlaybackPoints = 0;
+    m_playbackIndex = 0;
+    
+    // 隐藏回放面板
+    if (m_playbackPanel) {
+        m_playbackPanel->setVisible(false);
+    }
+    
+    // 重置状态
+    m_state = RecorderState::Idle;
+    m_triggerState = TriggerState::Idle;
+    
+    // 更新UI
+    updateButtonStates();
+    updateStatusBar();
+    
+    qDebug() << "[WaveformRecorder] 已重置到空闲模式";
+}
+
 void WaveformRecorderWidget::pausePlayback() {
     m_playbackTimer->stop();
     m_state = RecorderState::Paused;
@@ -1514,10 +1579,45 @@ void WaveformRecorderWidget::onAddChannelClicked() {
 
     // 创建选择对话框
     QDialog dialog(this);
-    dialog.setWindowTitle(tr("添加录波通道"));
+    QString title = m_isRemoteMode ? 
+        tr("添加录波通道 - 远程模式 (%1)").arg(m_remoteHost) :
+        tr("添加录波通道 - 本地模式");
+    dialog.setWindowTitle(title);
     dialog.setMinimumWidth(450);
 
     QVBoxLayout* layout = new QVBoxLayout(&dialog);
+    
+    // 数据来源提示
+    QLabel* sourceLabel = new QLabel(&dialog);
+    if (m_isRemoteMode) {
+        sourceLabel->setText(tr("📡 数据来源: 远程设备 (%1)").arg(m_remoteHost));
+        sourceLabel->setStyleSheet("QLabel { color: #3B82F6; font-weight: bold; padding: 5px; background: #EFF6FF; border-radius: 4px; }");
+    } else {
+        sourceLabel->setText(tr("💻 数据来源: 本地设备"));
+        sourceLabel->setStyleSheet("QLabel { color: #10B981; font-weight: bold; padding: 5px; background: #ECFDF5; border-radius: 4px; }");
+    }
+    layout->addWidget(sourceLabel);
+    
+    // 可用标签数量提示
+    QLabel* countLabel = new QLabel(tr("可用数据点: %1 个").arg(availableTags.size()), &dialog);
+    countLabel->setStyleSheet("color: #64748B; margin-bottom: 10px;");
+    layout->addWidget(countLabel);
+    
+    if (availableTags.isEmpty()) {
+        QLabel* warningLabel = new QLabel(&dialog);
+        if (m_isRemoteMode) {
+            warningLabel->setText(tr("⚠️ 未获取到远程数据点。请确保:\n"
+                                    "1. 远程设备已连接\n"
+                                    "2. 远程设备上有运行中的通道\n"
+                                    "3. 通道中有配置的采集器映射"));
+        } else {
+            warningLabel->setText(tr("⚠️ 未获取到本地数据点。请确保:\n"
+                                    "1. 有已创建的通道\n"
+                                    "2. 通道已启动运行"));
+        }
+        warningLabel->setStyleSheet("QLabel { color: #EF4444; padding: 10px; background: #FEF2F2; border-radius: 4px; }");
+        layout->addWidget(warningLabel);
+    }
 
     // 标签选择
     QFormLayout* formLayout = new QFormLayout();
@@ -1525,6 +1625,7 @@ void WaveformRecorderWidget::onAddChannelClicked() {
     QComboBox* tagCombo = new QComboBox(&dialog);
     tagCombo->addItems(availableTags);
     tagCombo->setEditable(true);
+    tagCombo->setPlaceholderText(tr("选择或输入数据点名称"));
     formLayout->addRow(tr("数据点:"), tagCombo);
 
     QLineEdit* nameEdit = new QLineEdit(&dialog);
@@ -1969,6 +2070,13 @@ void WaveformRecorderWidget::updateStatusBar() {
             break;
     }
 
+    // 添加模式信息
+    if (m_isRemoteMode) {
+        stateText += tr(" [📡远程:%1]").arg(m_remoteHost.isEmpty() ? "未连接" : m_remoteHost);
+    } else {
+        stateText += tr(" [💻本地]");
+    }
+
     // 添加触发状态
     if (m_triggerState == TriggerState::Armed) {
         stateText += tr(" [已布防]");
@@ -2094,5 +2202,180 @@ QString WaveformRecorderWidget::triggerStateToString(TriggerState state) const {
             return tr("完成");
         default:
             return tr("未知");
+    }
+}
+
+// ==================== 模式设置方法 ====================
+
+void WaveformRecorderWidget::setLocalMode() {
+    m_isRemoteMode = false;
+    m_remoteHost.clear();
+    if (m_modeStatusBanner) {
+        m_modeStatusBanner->setLocalMode();
+    }
+}
+
+void WaveformRecorderWidget::setLocalWithApiMode(quint16 httpPort, quint16 wsPort) {
+    m_isRemoteMode = false;
+    m_remoteHost.clear();
+    if (m_modeStatusBanner) {
+        m_modeStatusBanner->setLocalWithApiMode(httpPort, wsPort);
+    }
+}
+
+void WaveformRecorderWidget::setRemoteMode(const QString& remoteHost, bool connected) {
+    m_isRemoteMode = true;
+    m_remoteHost = remoteHost;
+    if (m_modeStatusBanner) {
+        m_modeStatusBanner->setRemoteMode(remoteHost, connected);
+    }
+    
+    // 远程模式下获取可用标签
+    if (connected && m_remoteClient) {
+        m_remoteClient->getAllTags();
+    }
+}
+
+void WaveformRecorderWidget::setRemoteClient(RemoteClient* client) {
+    // 断开旧客户端的连接
+    if (m_remoteClient) {
+        disconnect(m_remoteClient, nullptr, this, nullptr);
+    }
+    
+    m_remoteClient = client;
+    
+    if (m_remoteClient) {
+        // 连接远程数据推送信号
+        connect(m_remoteClient, &RemoteClient::realtimeDataReceived, this, 
+            [this](const QString& channelName, const QJsonObject& data) {
+                if (m_isRemoteMode) {
+                    onRemoteDataReceived(channelName, data);
+                }
+            });
+        
+        // 连接标签响应信号（用于获取可用标签）
+        connect(m_remoteClient, &RemoteClient::allTagsReceived, this,
+            [this](const QJsonArray& tags) {
+                if (m_isRemoteMode) {
+                    m_remoteAvailableTags.clear();
+                    for (const QJsonValue& tag : tags) {
+                        QJsonObject tagObj = tag.toObject();
+                        QString tagName = tagObj["name"].toString();
+                        if (!tagName.isEmpty()) {
+                            m_remoteAvailableTags.append(tagName);
+                        }
+                    }
+                    qInfo() << "[WaveformRecorder] 获取到远程标签:" << m_remoteAvailableTags.size() << "个";
+                }
+            });
+        
+        // 远程模式下立即获取所有可用标签
+        if (m_isRemoteMode) {
+            m_remoteClient->getAllTags();
+        }
+    }
+}
+
+void WaveformRecorderWidget::onRemoteDataReceived(const QString& channelName, const QJsonObject& data) {
+    // 在远程模式下处理实时数据
+    if (!m_isRemoteMode) return;
+    
+    // 只在录波或等待触发状态下处理
+    if (m_state != RecorderState::Recording && m_state != RecorderState::WaitingTrigger) {
+        return;
+    }
+    
+    // 调试：首次接收数据时输出日志
+    static int receiveCount = 0;
+    if (receiveCount++ < 5) {
+        qDebug() << "[WaveformRecorder] 收到远程数据 from:" << channelName 
+                 << "tags:" << data.keys().join(", ")
+                 << "录波通道数:" << m_channels.size();
+    }
+    
+    double timestamp = m_elapsedTimer.elapsed() / 1000.0;
+    
+    // 遍历所有通道，查找匹配的数据
+    for (int i = 0; i < m_channels.size(); ++i) {
+        WaveformChannel& channel = m_channels[i];
+        
+        if (!channel.enabled) continue;
+        
+        // 检查标签名是否匹配
+        // 数据格式: { "tagName1": { "value": ..., "quality": ... }, "tagName2": ... }
+        QString fullTagName = channel.tagName;
+        QString tagOnly = fullTagName.contains('/') ? fullTagName.section('/', -1) : fullTagName;
+        
+        // 尝试多种匹配方式
+        QString matchedKey;
+        if (data.contains(fullTagName)) {
+            matchedKey = fullTagName;
+        } else if (data.contains(tagOnly)) {
+            matchedKey = tagOnly;
+        } else {
+            // 尝试不区分大小写匹配
+            for (const QString& key : data.keys()) {
+                if (key.compare(tagOnly, Qt::CaseInsensitive) == 0 ||
+                    key.compare(fullTagName, Qt::CaseInsensitive) == 0) {
+                    matchedKey = key;
+                    break;
+                }
+            }
+        }
+        
+        if (matchedKey.isEmpty()) {
+            continue; // 未找到匹配的数据
+        }
+        
+        QJsonValue pointValue = data[matchedKey];
+        double rawValue;
+        
+        // 支持两种数据格式：直接值或对象
+        if (pointValue.isObject()) {
+            QJsonObject pointData = pointValue.toObject();
+            rawValue = pointData["value"].toDouble();
+        } else {
+            rawValue = pointValue.toDouble();
+        }
+        
+        double scaledValue = channel.transform(rawValue);
+        
+        WaveformDataPoint wfPoint(timestamp, rawValue, scaledValue);
+        
+        if (m_state == RecorderState::WaitingTrigger) {
+            // 预触发缓冲
+            m_preTriggerBuffer[i].enqueue(wfPoint);
+            while (m_preTriggerBuffer[i].size() > m_preTriggerBufferSize) {
+                m_preTriggerBuffer[i].dequeue();
+            }
+            
+            // 检查触发条件（通过通道索引而非tagName）
+            if (m_triggerConfig.condition != TriggerCondition::None &&
+                i == m_triggerConfig.channelIndex &&
+                m_triggerState == TriggerState::Armed) {
+                if (checkTriggerCondition(scaledValue, m_lastTriggerValue)) {
+                    handleTrigger();
+                }
+                m_lastTriggerValue = scaledValue;
+            }
+        } else if (m_state == RecorderState::Recording) {
+            // 正常录波 - 数据存储在 m_channelData 中
+            m_channelData[i].append(wfPoint);
+            
+            // 限制数据点数量
+            while (m_channelData[i].size() > m_maxDataPoints) {
+                m_channelData[i].removeFirst();
+            }
+            
+            // 更新图表
+            if (channel.graphIndex >= 0 && channel.graphIndex < m_plot->graphCount()) {
+                m_plot->graph(channel.graphIndex)->addData(timestamp, scaledValue);
+            }
+        }
+    }
+    
+    // 更新显示
+    if (m_state == RecorderState::Recording) {
+        updatePlotGraphs();
     }
 }

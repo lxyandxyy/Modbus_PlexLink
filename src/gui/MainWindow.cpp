@@ -380,6 +380,13 @@ void MainWindow::initializeMode(ApplicationMode mode) {
       if (m_modeIndicator) {
         m_modeIndicator->setLocalMode(true, m_localHttpPort, m_localWsPort);
       }
+      // 设置告警和录波界面为本地+API模式
+      if (m_alarmWidget) {
+        m_alarmWidget->setLocalWithApiMode(m_localHttpPort, m_localWsPort);
+      }
+      if (m_waveformRecorder) {
+        m_waveformRecorder->setLocalWithApiMode(m_localHttpPort, m_localWsPort);
+      }
       setWindowTitle("Modbus PlexLink - 数据采集与虚拟化服务系统");
       break;
 
@@ -389,6 +396,13 @@ void MainWindow::initializeMode(ApplicationMode mode) {
       m_isRemoteMode = false;
       if (m_modeIndicator) {
         m_modeIndicator->setLocalMode(false);
+      }
+      // 设置告警和录波界面为纯本地模式
+      if (m_alarmWidget) {
+        m_alarmWidget->setLocalMode();
+      }
+      if (m_waveformRecorder) {
+        m_waveformRecorder->setLocalMode();
       }
       setWindowTitle("Modbus PlexLink - 本地模式");
       break;
@@ -400,6 +414,7 @@ void MainWindow::initializeMode(ApplicationMode mode) {
       if (m_modeIndicator) {
         m_modeIndicator->setRemoteMode("", false);
       }
+      // 告警和录波界面在 enterRemoteMode() 中设置
       setWindowTitle("Modbus PlexLink - 远程客户端");
       break;
   }
@@ -479,6 +494,22 @@ void MainWindow::enterRemoteMode() {
     }
     m_currentChannel = nullptr;
   }
+  
+  // 获取远程主机地址和连接状态
+  bool isConnected = m_remoteClient && m_remoteClient->isConnected();
+
+  // 设置告警界面为远程模式
+  if (m_alarmWidget) {
+    m_alarmWidget->setRemoteMode(m_remoteHost, isConnected);
+    m_alarmWidget->setRemoteClient(m_remoteClient);
+    m_alarmWidget->refreshDisplay();
+  }
+
+  // 设置录波界面为远程模式
+  if (m_waveformRecorder) {
+    m_waveformRecorder->setRemoteMode(m_remoteHost, isConnected);
+    m_waveformRecorder->setRemoteClient(m_remoteClient);
+  }
 
   // *** 重要：停止所有本地通道，避免继续产生报文 ***
   if (m_channelManager) {
@@ -526,6 +557,17 @@ void MainWindow::exitRemoteMode() {
   // 恢复报文面板为本地模式（清除远程报文）
   if (m_messageLogPanel) {
     m_messageLogPanel->setRemoteMode(false);
+  }
+
+  // 恢复告警界面为本地模式
+  if (m_alarmWidget) {
+    m_alarmWidget->setLocalMode();
+    m_alarmWidget->refreshDisplay();
+  }
+
+  // 恢复录波界面为本地模式
+  if (m_waveformRecorder) {
+    m_waveformRecorder->setLocalMode();
   }
 
   // 恢复本地通道显示
@@ -1796,10 +1838,46 @@ void MainWindow::onShowAlarmManager() {
     if (!m_alarmWidget) {
         m_alarmWidget = new AlarmWidget(m_alarmManager, m_channelManager);
         m_alarmWidget->setWindowIcon(windowIcon());
-           // 连接录波回放信号
-    connect(m_alarmWidget, &AlarmWidget::requestPlaybackInRecorder, this,
-            &MainWindow::onPlaybackAlarmRecording);
+        // 连接录波回放信号
+        connect(m_alarmWidget, &AlarmWidget::requestPlaybackInRecorder, this,
+                &MainWindow::onPlaybackAlarmRecording);
+        // 连接远程告警通知信号
+        connect(m_alarmWidget, &AlarmWidget::alarmNotification, this,
+            [this](const QString& ruleName, const QString& message, AlarmPriority priority) {
+                QString title = tr("远程报警: %1").arg(ruleName);
+                if (m_trayIcon && m_trayIcon->isVisible()) {
+                    QSystemTrayIcon::MessageIcon icon;
+                    switch (priority) {
+                        case AlarmPriority::Critical:
+                        case AlarmPriority::High:
+                            icon = QSystemTrayIcon::Critical;
+                            break;
+                        case AlarmPriority::Medium:
+                            icon = QSystemTrayIcon::Warning;
+                            break;
+                        default:
+                            icon = QSystemTrayIcon::Information;
+                            break;
+                    }
+                    m_trayIcon->showMessage(title, message, icon, 5000);
+                }
+                updateAlarmIndicator();
+            });
     }
+    
+    // 每次显示时都根据当前模式更新状态（确保模式同步）
+    if (m_isRemoteMode) {
+        bool isConnected = m_remoteClient && m_remoteClient->isConnected();
+        m_alarmWidget->setRemoteMode(m_remoteHost, isConnected);
+        m_alarmWidget->setRemoteClient(m_remoteClient);
+    } else if (m_appMode == ApplicationMode::LocalWithApi) {
+        m_alarmWidget->setLocalWithApiMode(m_localHttpPort, m_localWsPort);
+    } else {
+        m_alarmWidget->setLocalMode();
+    }
+    
+    // 刷新数据（无论本地还是远程模式）
+    m_alarmWidget->refreshDisplay();
 
     m_alarmWidget->show();
     m_alarmWidget->raise();
@@ -1816,6 +1894,17 @@ void MainWindow::onPlaybackAlarmRecording(
         m_waveformRecorder->setWindowTitle(tr("指定点位录波 - Modbus PlexLink"));
         m_waveformRecorder->setWindowIcon(windowIcon());
         m_waveformRecorder->resize(1200, 700);
+    }
+    
+    // 根据当前模式设置录波界面状态
+    if (m_isRemoteMode) {
+        bool isConnected = m_remoteClient && m_remoteClient->isConnected();
+        m_waveformRecorder->setRemoteMode(m_remoteHost, isConnected);
+        m_waveformRecorder->setRemoteClient(m_remoteClient);
+    } else if (m_appMode == ApplicationMode::LocalWithApi) {
+        m_waveformRecorder->setLocalWithApiMode(m_localHttpPort, m_localWsPort);
+    } else {
+        m_waveformRecorder->setLocalMode();
     }
     
     // 将 AlarmRecordingData::DataPoint 转换为 WaveformRecorderWidget 需要的格式
@@ -1855,15 +1944,24 @@ void MainWindow::onShowWaveformRecorder() {
         m_waveformRecorder->setWindowTitle(tr("指定点位录波 - Modbus PlexLink"));
         m_waveformRecorder->setWindowIcon(windowIcon());
         m_waveformRecorder->resize(1200, 700);
-        
-        // 设置当前通道的数据模型
-        if (m_currentChannel) {
-            m_waveformRecorder->setDataModel(m_currentChannel->getDataModel());
-        }
     }
     
-    // 更新数据模型（如果当前通道改变）
-    if (m_currentChannel) {
+    // 如果是回放模式，先重置到空闲模式（避免用户看到旧的回放数据）
+    m_waveformRecorder->resetToIdleMode();
+    
+    // 每次显示时都根据当前模式更新状态（确保模式同步）
+    if (m_isRemoteMode) {
+        bool isConnected = m_remoteClient && m_remoteClient->isConnected();
+        m_waveformRecorder->setRemoteMode(m_remoteHost, isConnected);
+        m_waveformRecorder->setRemoteClient(m_remoteClient);
+    } else if (m_appMode == ApplicationMode::LocalWithApi) {
+        m_waveformRecorder->setLocalWithApiMode(m_localHttpPort, m_localWsPort);
+    } else {
+        m_waveformRecorder->setLocalMode();
+    }
+    
+    // 更新数据模型（如果当前通道改变，仅本地模式）
+    if (!m_isRemoteMode && m_currentChannel) {
         m_waveformRecorder->setDataModel(m_currentChannel->getDataModel());
     }
     
@@ -2876,6 +2974,16 @@ void MainWindow::onRemoteConnected() {
   if (m_modeIndicator) {
     m_modeIndicator->setRemoteMode(m_remoteHost, true);
   }
+  
+  // 更新告警界面连接状态（现在确保已连接）
+  if (m_alarmWidget) {
+    m_alarmWidget->setRemoteMode(m_remoteHost, true);
+  }
+  
+  // 更新录波界面连接状态
+  if (m_waveformRecorder) {
+    m_waveformRecorder->setRemoteMode(m_remoteHost, true);
+  }
     
     // 更新按钮状态
   m_connectRemoteAction->setEnabled(true);
@@ -2973,6 +3081,16 @@ void MainWindow::onRemoteDisconnected() {
     // 更新模式指示器（保持远程模式但显示断开状态）
     if (m_modeIndicator) {
       m_modeIndicator->setRemoteMode(m_remoteHost, false);
+    }
+    
+    // 更新告警界面连接状态（显示断开）
+    if (m_alarmWidget) {
+      m_alarmWidget->setRemoteMode(m_remoteHost, false);
+    }
+    
+    // 更新录波界面连接状态
+    if (m_waveformRecorder) {
+      m_waveformRecorder->setRemoteMode(m_remoteHost, false);
     }
         
         // 更新按钮状态

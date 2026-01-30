@@ -11,7 +11,9 @@
 #include <QVBoxLayout>
 
 #include "AlarmRuleDialog.h"
+#include "ModeStatusBanner.h"
 #include "core/ChannelManager.h"
+#include "remote/RemoteClient.h"
 
 namespace ModbusPlexLink {
 
@@ -20,6 +22,9 @@ AlarmWidget::AlarmWidget(AlarmManager* alarmManager,
     : QWidget(parent),
       m_alarmManager(alarmManager),
       m_channelManager(channelManager),
+      m_remoteClient(nullptr),
+      m_isRemoteMode(false),
+      m_modeStatusBanner(nullptr),
       m_tabWidget(nullptr),
       m_activeAlarmsTable(nullptr),
       m_acknowledgeBtn(nullptr),
@@ -30,6 +35,7 @@ AlarmWidget::AlarmWidget(AlarmManager* alarmManager,
       m_historyTable(nullptr),
       m_refreshHistoryBtn(nullptr),
       m_historyDaysCombo(nullptr),
+      m_viewHistoryRecordingBtn(nullptr),
       m_rulesTable(nullptr),
       m_addRuleBtn(nullptr),
       m_editRuleBtn(nullptr),
@@ -58,7 +64,8 @@ AlarmWidget::AlarmWidget(AlarmManager* alarmManager,
   connect(m_alarmManager, &AlarmManager::recordingCompleted, this,
           &AlarmWidget::onRecordingCompleted, Qt::QueuedConnection);
 
-  refreshDisplay();
+  // 注意：不在构造函数中调用 refreshDisplay()
+  // 由 MainWindow::onShowAlarmManager() 在设置正确的模式后调用
 }
 
 AlarmWidget::~AlarmWidget() {}
@@ -66,6 +73,10 @@ AlarmWidget::~AlarmWidget() {}
 void AlarmWidget::setupUi() {
   QVBoxLayout* mainLayout = new QVBoxLayout(this);
   mainLayout->setContentsMargins(10, 10, 10, 10);
+  
+  // 模式状态Banner
+  m_modeStatusBanner = new ModeStatusBanner(this);
+  mainLayout->addWidget(m_modeStatusBanner);
 
   // 标题
   QLabel* titleLabel = new QLabel(tr("报警管理"), this);
@@ -157,15 +168,53 @@ void AlarmWidget::setupUi() {
 
   // 历史表格
   m_historyTable = new QTableWidget(this);
-  m_historyTable->setColumnCount(10);
+  m_historyTable->setColumnCount(11);
   m_historyTable->setHorizontalHeaderLabels(
       {tr("优先级"), tr("类型"), tr("通道"), tr("标签"), tr("值"), tr("消息"),
-       tr("触发时间"), tr("确认时间"), tr("清除时间"), tr("确认人")});
+       tr("触发时间"), tr("确认时间"), tr("清除时间"), tr("确认人"), tr("录波")});
   m_historyTable->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_historyTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
   m_historyTable->setAlternatingRowColors(true);
   m_historyTable->horizontalHeader()->setStretchLastSection(true);
+  
+  // 连接双击事件以查看录波
+  connect(m_historyTable, &QTableWidget::cellDoubleClicked, this, [this](int row, int column) {
+      Q_UNUSED(column);
+      if (row >= 0) {
+          // 检查是否有录波
+          QTableWidgetItem* recItem = m_historyTable->item(row, 10);
+          if (recItem && recItem->data(Qt::UserRole + 1).toBool()) {
+              onViewHistoryRecording();
+          }
+      }
+  });
+  
   historyLayout->addWidget(m_historyTable);
+  
+  // 查看历史录波按钮
+  QHBoxLayout* historyBtnLayout = new QHBoxLayout();
+  m_viewHistoryRecordingBtn = new QPushButton(tr("📊 查看录波"), this);
+  m_viewHistoryRecordingBtn->setEnabled(false);
+  m_viewHistoryRecordingBtn->setStyleSheet(
+      "QPushButton { padding: 6px 12px; }"
+      "QPushButton:enabled { background: #3B82F6; color: white; border: none; border-radius: 4px; }"
+      "QPushButton:disabled { background: #E2E8F0; color: #94A3B8; }");
+  connect(m_viewHistoryRecordingBtn, &QPushButton::clicked, this, &AlarmWidget::onViewHistoryRecording);
+  historyBtnLayout->addWidget(m_viewHistoryRecordingBtn);
+  historyBtnLayout->addStretch();
+  historyLayout->addLayout(historyBtnLayout);
+  
+  // 连接选择变化信号
+  connect(m_historyTable, &QTableWidget::itemSelectionChanged, this, [this]() {
+      int row = m_historyTable->currentRow();
+      if (row >= 0) {
+          QTableWidgetItem* recItem = m_historyTable->item(row, 10);
+          bool hasRecording = recItem && recItem->data(Qt::UserRole + 1).toBool();
+          m_viewHistoryRecordingBtn->setEnabled(hasRecording);
+      } else {
+          m_viewHistoryRecordingBtn->setEnabled(false);
+      }
+  });
 
   m_tabWidget->addTab(historyTab, tr("报警历史"));
 
@@ -226,11 +275,17 @@ void AlarmWidget::setupUi() {
 }
 
 void AlarmWidget::refreshDisplay() {
+  if (m_isRemoteMode && m_remoteClient) {
+    // 远程模式：从远程服务器获取数据
+    refreshRemoteData();
+  } else {
+    // 本地模式：从本地AlarmManager获取数据
   updateActiveAlarmsTable();
   updateHistoryTable();
   updateRulesTable();
   updateStatistics();
   updateRecordingsTable();
+  }
 }
 
 void AlarmWidget::onAlarmTriggered(const AlarmEvent& event) {
@@ -269,8 +324,14 @@ void AlarmWidget::onAcknowledgeAlarm() {
       QInputDialog::getText(this, tr("确认报警"), tr("确认人（可选）:"),
                             QLineEdit::Normal, tr("操作员"));
 
+  if (m_isRemoteMode && m_remoteClient) {
+    // 远程模式
+    m_remoteClient->acknowledgeAlarm(eventId);
+  } else {
+    // 本地模式
   if (m_alarmManager->acknowledgeAlarm(eventId, user)) {
     QMessageBox::information(this, tr("成功"), tr("报警已确认"));
+    }
   }
 }
 
@@ -289,8 +350,14 @@ void AlarmWidget::onClearAlarm() {
                             QMessageBox::Yes | QMessageBox::No);
 
   if (reply == QMessageBox::Yes) {
+    if (m_isRemoteMode && m_remoteClient) {
+      // 远程模式
+      m_remoteClient->clearAlarm(eventId);
+    } else {
+      // 本地模式
     if (m_alarmManager->clearAlarm(eventId)) {
       QMessageBox::information(this, tr("成功"), tr("报警已清除"));
+      }
     }
   }
 }
@@ -396,18 +463,24 @@ void AlarmWidget::onDeleteRule() {
   }
 
   QString ruleId = m_rulesTable->item(row, 0)->data(Qt::UserRole).toString();
-  AlarmRule rule = m_alarmManager->getRule(ruleId);
+  QString ruleName = m_rulesTable->item(row, 1)->text();
 
   auto reply = QMessageBox::question(
-      this, tr("删除规则"), tr("确定要删除规则 \"%1\" 吗？").arg(rule.name),
+      this, tr("删除规则"), tr("确定要删除规则 \"%1\" 吗？").arg(ruleName),
       QMessageBox::Yes | QMessageBox::No);
 
   if (reply == QMessageBox::Yes) {
+    if (m_isRemoteMode && m_remoteClient) {
+      // 远程模式
+      m_remoteClient->deleteAlarmRule(ruleId);
+    } else {
+      // 本地模式
     if (m_alarmManager->removeRule(ruleId)) {
       QMessageBox::information(this, tr("成功"), tr("规则已删除"));
       updateRulesTable();
       // 自动保存配置
       m_alarmManager->saveConfig("alarm_config.json");
+      }
     }
   }
 }
@@ -420,8 +493,16 @@ void AlarmWidget::onToggleRule() {
   }
 
   QString ruleId = m_rulesTable->item(row, 0)->data(Qt::UserRole).toString();
+  
+  if (m_isRemoteMode && m_remoteClient) {
+    // 远程模式：需要先获取当前状态
+    // 从表格中读取当前状态
+    QTableWidgetItem* enabledItem = m_rulesTable->item(row, 0);
+    bool currentEnabled = (enabledItem->text() == tr("是"));
+    m_remoteClient->enableAlarmRule(ruleId, !currentEnabled);
+  } else {
+    // 本地模式
   AlarmRule rule = m_alarmManager->getRule(ruleId);
-
   bool newState = !rule.enabled;
   if (m_alarmManager->enableRule(ruleId, newState)) {
     QMessageBox::information(
@@ -430,15 +511,33 @@ void AlarmWidget::onToggleRule() {
     updateRulesTable();
     // 自动保存配置
     m_alarmManager->saveConfig("alarm_config.json");
+    }
   }
 }
 
 void AlarmWidget::onPriorityFilterChanged(int index) {
   Q_UNUSED(index);
-  updateRulesTable();
+  if (m_isRemoteMode && m_remoteClient) {
+    m_remoteClient->getAlarmRules();
+  } else {
+    updateRulesTable();
+  }
 }
 
-void AlarmWidget::onRefreshHistory() { updateHistoryTable(); }
+void AlarmWidget::onRefreshHistory() { 
+  if (m_isRemoteMode && m_remoteClient) {
+    int days = 3;
+    switch (m_historyDaysCombo->currentIndex()) {
+      case 0: days = 1; break;
+      case 1: days = 3; break;
+      case 2: days = 7; break;
+      case 3: days = 30; break;
+    }
+    m_remoteClient->getAlarmHistory(days);
+  } else {
+    updateHistoryTable(); 
+  }
+}
 
 void AlarmWidget::updateActiveAlarmsTable() {
   m_activeAlarmsTable->setSortingEnabled(false);
@@ -505,9 +604,11 @@ void AlarmWidget::updateHistoryTable() {
     int row = m_historyTable->rowCount();
     m_historyTable->insertRow(row);
 
+    // 优先级列，存储事件ID
     QTableWidgetItem* priorityItem =
         new QTableWidgetItem(alarmPriorityToString(event.priority));
     priorityItem->setBackground(alarmPriorityColor(event.priority));
+    priorityItem->setData(Qt::UserRole, event.id);  // 存储事件ID
     m_historyTable->setItem(row, 0, priorityItem);
 
     m_historyTable->setItem(
@@ -533,7 +634,21 @@ void AlarmWidget::updateHistoryTable() {
                 ? event.clearedTime.toString("yyyy-MM-dd HH:mm:ss")
                 : "-"));
     m_historyTable->setItem(row, 9, new QTableWidgetItem(event.acknowledgedBy));
+    
+    // 录波列
+    QTableWidgetItem* recordingItem = new QTableWidgetItem(event.hasRecording ? "📊 有录波" : "-");
+    recordingItem->setData(Qt::UserRole, event.recordingFilePath);  // 存储录波文件路径
+    recordingItem->setData(Qt::UserRole + 1, event.hasRecording);   // 存储是否有录波
+    if (event.hasRecording) {
+        recordingItem->setForeground(QColor("#3B82F6"));
+        recordingItem->setToolTip(tr("双击查看录波\n文件: %1").arg(
+            event.recordingFilePath.isEmpty() ? tr("内存数据") : event.recordingFilePath));
+    }
+    m_historyTable->setItem(row, 10, recordingItem);
   }
+  
+  // 更新按钮状态
+  m_viewHistoryRecordingBtn->setEnabled(false);
 }
 
 void AlarmWidget::updateRulesTable() {
@@ -853,23 +968,56 @@ void AlarmWidget::onViewRecording() {
 
   QString alarmEventId =
       m_recordingsTable->item(row, 0)->data(Qt::UserRole).toString();
-  AlarmRecordingData data = m_alarmManager->getRecordingData(alarmEventId);
-
-  QString info =
-      tr("报警事件ID: %1\n"
-         "开始时间: %2\n"
-         "结束时间: %3\n"
-         "数据点数: %4\n"
-         "录波标签: %5\n"
-         "CSV文件: %6")
-          .arg(alarmEventId)
-          .arg(data.startTime.toString("yyyy-MM-dd HH:mm:ss"))
-          .arg(data.endTime.isValid()
-                   ? data.endTime.toString("yyyy-MM-dd HH:mm:ss")
-                   : tr("未完成"))
-          .arg(data.totalDataPoints)
-          .arg(data.recordedTags.join(", "))
-          .arg(data.csvFilePath.isEmpty() ? tr("无") : data.csvFilePath);
+  
+  QString info;
+  if (m_isRemoteMode) {
+    // 远程模式：从缓存获取数据
+    if (!m_remoteRecordingCache.contains(alarmEventId)) {
+      QMessageBox::warning(this, tr("错误"), tr("未找到录波数据缓存"));
+      return;
+    }
+    QJsonObject rec = m_remoteRecordingCache[alarmEventId];
+    QJsonArray tags = rec["recordedTags"].toArray();
+    QStringList tagList;
+    for (const QJsonValue& t : tags) {
+      tagList.append(t.toString());
+    }
+    
+    QDateTime startTime = QDateTime::fromString(rec["startTime"].toString(), Qt::ISODate);
+    QString endTimeStr = rec["endTime"].toString();
+    
+    info = tr("报警事件ID: %1\n"
+              "开始时间: %2\n"
+              "结束时间: %3\n"
+              "数据点数: %4\n"
+              "录波标签: %5\n"
+              "CSV文件: %6\n"
+              "[远程数据]")
+             .arg(alarmEventId)
+             .arg(startTime.toString("yyyy-MM-dd HH:mm:ss"))
+             .arg(endTimeStr.isEmpty() ? tr("未完成") : 
+                  QDateTime::fromString(endTimeStr, Qt::ISODate).toString("yyyy-MM-dd HH:mm:ss"))
+             .arg(rec["totalDataPoints"].toInt())
+             .arg(tagList.join(", "))
+             .arg(rec["csvFilePath"].toString().isEmpty() ? tr("无") : rec["csvFilePath"].toString());
+  } else {
+    // 本地模式
+    AlarmRecordingData data = m_alarmManager->getRecordingData(alarmEventId);
+    info = tr("报警事件ID: %1\n"
+              "开始时间: %2\n"
+              "结束时间: %3\n"
+              "数据点数: %4\n"
+              "录波标签: %5\n"
+              "CSV文件: %6")
+             .arg(alarmEventId)
+             .arg(data.startTime.toString("yyyy-MM-dd HH:mm:ss"))
+             .arg(data.endTime.isValid()
+                      ? data.endTime.toString("yyyy-MM-dd HH:mm:ss")
+                      : tr("未完成"))
+             .arg(data.totalDataPoints)
+             .arg(data.recordedTags.join(", "))
+             .arg(data.csvFilePath.isEmpty() ? tr("无") : data.csvFilePath);
+  }
 
   QMessageBox::information(this, tr("录波数据详情"), info);
 }
@@ -910,15 +1058,38 @@ void AlarmWidget::onPlaybackRecording() {
 
   QString alarmEventId =
       m_recordingsTable->item(row, 0)->data(Qt::UserRole).toString();
-  AlarmRecordingData data = m_alarmManager->getRecordingData(alarmEventId);
+  
+  if (m_isRemoteMode) {
+    // 远程模式：需要先请求完整录波数据
+    if (!m_remoteClient) {
+      QMessageBox::warning(this, tr("错误"), tr("远程客户端未连接"));
+      return;
+    }
+    
+    // 请求完整录波数据
+    QMessageBox::information(this, tr("提示"), 
+        tr("正在从远程服务器获取录波数据，请稍候...\n"
+           "注意：大数据量可能需要较长时间。"));
+    
+    // 发送请求（异步处理）
+    m_remoteClient->getAlarmRecording(alarmEventId);
+    
+    // 监听响应并处理回放（在 alarmRecordingReceived 信号处理中）
+    // 设置标记，表示等待回放
+    m_pendingPlaybackAlarmId = alarmEventId;
+    
+  } else {
+    // 本地模式
+    AlarmRecordingData data = m_alarmManager->getRecordingData(alarmEventId);
 
-  if (data.data.isEmpty()) {
-    QMessageBox::warning(this, tr("错误"), tr("录波数据为空或不可用"));
-    return;
+    if (data.data.isEmpty()) {
+      QMessageBox::warning(this, tr("错误"), tr("录波数据为空或不可用"));
+      return;
+    }
+
+    // 发射信号，请求在系统录波界面中回放
+    emit requestPlaybackInRecorder(data.csvFilePath, data);
   }
-
-  // 发射信号，请求在系统录波界面中回放
-  emit requestPlaybackInRecorder(data.csvFilePath, data);
 }
 
 void AlarmWidget::onDeleteRecording() {
@@ -938,6 +1109,500 @@ void AlarmWidget::onDeleteRecording() {
     QMessageBox::information(this, tr("提示"),
                              tr("录波数据将在程序重启或自动清理时移除。"));
   }
+}
+
+// ==================== 模式设置方法 ====================
+
+void AlarmWidget::setLocalMode() {
+  m_isRemoteMode = false;
+  m_remoteHost.clear();
+  m_modeStatusBanner->setLocalMode();
+}
+
+void AlarmWidget::setLocalWithApiMode(quint16 httpPort, quint16 wsPort) {
+  m_isRemoteMode = false;
+  m_remoteHost.clear();
+  m_modeStatusBanner->setLocalWithApiMode(httpPort, wsPort);
+}
+
+void AlarmWidget::setRemoteMode(const QString& remoteHost, bool connected) {
+  m_isRemoteMode = true;
+  m_remoteHost = remoteHost;
+  m_modeStatusBanner->setRemoteMode(remoteHost, connected);
+}
+
+void AlarmWidget::setRemoteClient(RemoteClient* client) {
+  // 断开旧客户端的连接
+  if (m_remoteClient) {
+    disconnect(m_remoteClient, nullptr, this, nullptr);
+  }
+  
+  m_remoteClient = client;
+  
+  if (m_remoteClient) {
+    // 连接远程客户端信号
+    connect(m_remoteClient, &RemoteClient::alarmsReceived, this, [this](const QJsonArray& alarms) {
+        if (m_isRemoteMode) {
+            updateActiveAlarmsTableFromJson(alarms);
+            updateStatisticsFromCount(alarms.size());
+        }
+    });
+    
+    connect(m_remoteClient, &RemoteClient::alarmHistoryReceived, this, [this](const QJsonArray& alarms, int days) {
+        Q_UNUSED(days);
+        if (m_isRemoteMode) {
+            updateHistoryTableFromJson(alarms);
+        }
+    });
+    
+    connect(m_remoteClient, &RemoteClient::alarmRulesReceived, this, [this](const QJsonArray& rules) {
+        if (m_isRemoteMode) {
+            updateRulesTableFromJson(rules);
+        }
+    });
+    
+    connect(m_remoteClient, &RemoteClient::alarmAcknowledged, this, [this](const QString& alarmId, bool success) {
+        if (success) {
+            qInfo() << "[AlarmWidget] 远程告警已确认:" << alarmId;
+            refreshRemoteData();
+        }
+    });
+    
+    connect(m_remoteClient, &RemoteClient::alarmCleared, this, [this](const QString& alarmId, bool success) {
+        if (success) {
+            qInfo() << "[AlarmWidget] 远程告警已清除:" << alarmId;
+            refreshRemoteData();
+        }
+    });
+    
+    connect(m_remoteClient, &RemoteClient::alarmRuleAdded, this, [this](const QString& ruleId, bool success) {
+        if (success) {
+            qInfo() << "[AlarmWidget] 远程规则已添加:" << ruleId;
+            m_remoteClient->getAlarmRules();
+        }
+    });
+    
+    connect(m_remoteClient, &RemoteClient::alarmRuleDeleted, this, [this](const QString& ruleId, bool success) {
+        if (success) {
+            qInfo() << "[AlarmWidget] 远程规则已删除:" << ruleId;
+            m_remoteClient->getAlarmRules();
+        }
+    });
+    
+    connect(m_remoteClient, &RemoteClient::alarmRuleEnabled, this, [this](const QString& ruleId, bool enabled, bool success) {
+        if (success) {
+            qInfo() << "[AlarmWidget] 远程规则" << ruleId << (enabled ? "已启用" : "已禁用");
+            m_remoteClient->getAlarmRules();
+        }
+    });
+    
+    // 连接录波信号
+    connect(m_remoteClient, &RemoteClient::alarmRecordingsReceived, this, [this](const QJsonArray& recordings) {
+        if (m_isRemoteMode) {
+            updateRecordingsTableFromJson(recordings);
+        }
+    });
+    
+    connect(m_remoteClient, &RemoteClient::alarmRecordingReceived, this, [this](const QString& alarmId, const QJsonObject& recording) {
+        if (m_isRemoteMode) {
+            // 保存录波数据以供回放
+            m_remoteRecordingCache[alarmId] = recording;
+            qInfo() << "[AlarmWidget] 收到远程录波数据:" << alarmId;
+            
+            // 检查是否有等待的回放请求
+            if (!m_pendingPlaybackAlarmId.isEmpty() && m_pendingPlaybackAlarmId == alarmId) {
+                m_pendingPlaybackAlarmId.clear();
+                
+                // 解析录波数据并发送回放信号
+                AlarmRecordingData data;
+                data.alarmEventId = alarmId;
+                data.startTime = QDateTime::fromString(recording["startTime"].toString(), Qt::ISODate);
+                QString endTimeStr = recording["endTime"].toString();
+                if (!endTimeStr.isEmpty()) {
+                    data.endTime = QDateTime::fromString(endTimeStr, Qt::ISODate);
+                }
+                data.totalDataPoints = recording["totalDataPoints"].toInt();
+                data.csvFilePath = recording["csvFilePath"].toString();
+                data.isComplete = recording["isComplete"].toBool();
+                
+                QJsonArray tags = recording["recordedTags"].toArray();
+                for (const QJsonValue& t : tags) {
+                    data.recordedTags.append(t.toString());
+                }
+                
+                // 解析数据点
+                QJsonArray dataPoints = recording["data"].toArray();
+                for (const QJsonValue& dp : dataPoints) {
+                    QJsonObject dpObj = dp.toObject();
+                    AlarmRecordingData::DataPoint point;
+                    point.timestamp = static_cast<qint64>(dpObj["timestamp"].toDouble());
+                    QJsonObject values = dpObj["values"].toObject();
+                    for (auto it = values.begin(); it != values.end(); ++it) {
+                        point.values[it.key()] = it.value().toDouble();
+                    }
+                    data.data.append(point);
+                }
+                
+                if (data.data.isEmpty()) {
+                    QMessageBox::warning(this, tr("错误"), 
+                        tr("远程录波数据为空或数据量过大无法传输。\n"
+                           "请尝试在远程设备上直接查看录波文件。"));
+                } else {
+                    emit requestPlaybackInRecorder(data.csvFilePath, data);
+                }
+            }
+        }
+    });
+    
+    // *** 关键：连接实时告警推送信号 ***
+    connect(m_remoteClient, &RemoteClient::realtimeAlarmReceived, this, [this](const QJsonObject& alarmData) {
+        if (!m_isRemoteMode) return;
+        
+        QString action = alarmData["action"].toString();
+        qInfo() << "[AlarmWidget] 收到远程告警推送:" << action;
+        
+        if (action == "triggered") {
+            // 新告警触发 - 刷新活动告警列表
+            m_remoteClient->getAlarms();
+            
+            // 切换到活动告警标签页
+            m_tabWidget->setCurrentIndex(0);
+            
+            // 显示系统通知（如果界面不在前台）
+            if (!isActiveWindow()) {
+                emit alarmNotification(
+                    alarmData["ruleName"].toString(),
+                    alarmData["message"].toString(),
+                    static_cast<AlarmPriority>(alarmData["priority"].toInt())
+                );
+            }
+        } else if (action == "acknowledged" || action == "cleared") {
+            // 告警状态变化 - 刷新活动告警和历史
+            m_remoteClient->getAlarms();
+            int days = 3;
+            switch (m_historyDaysCombo->currentIndex()) {
+                case 0: days = 1; break;
+                case 1: days = 3; break;
+                case 2: days = 7; break;
+                case 3: days = 30; break;
+            }
+            m_remoteClient->getAlarmHistory(days);
+        } else if (action == "recordingCompleted") {
+            // 录波完成 - 更新录波数据表
+            if (m_isRemoteMode && m_remoteClient) {
+                m_remoteClient->getAlarmRecordings();
+            } else {
+                updateRecordingsTable();
+            }
+        }
+    });
+  }
+}
+
+void AlarmWidget::onViewHistoryRecording() {
+  int row = m_historyTable->currentRow();
+  if (row < 0) {
+    QMessageBox::information(this, tr("提示"), tr("请选择要查看录波的历史告警"));
+    return;
+  }
+  
+  // 获取事件ID
+  QTableWidgetItem* priorityItem = m_historyTable->item(row, 0);
+  if (!priorityItem) return;
+  
+  QString eventId = priorityItem->data(Qt::UserRole).toString();
+  
+  // 获取录波信息
+  QTableWidgetItem* recordingItem = m_historyTable->item(row, 10);
+  if (!recordingItem) return;
+  
+  bool hasRecording = recordingItem->data(Qt::UserRole + 1).toBool();
+  QString csvFilePath = recordingItem->data(Qt::UserRole).toString();
+  
+  if (!hasRecording) {
+    QMessageBox::information(this, tr("提示"), tr("该告警没有录波数据"));
+    return;
+  }
+  
+  if (m_isRemoteMode) {
+    // 远程模式：请求远程录波数据
+    if (!m_remoteClient) {
+      QMessageBox::warning(this, tr("错误"), tr("远程客户端未连接"));
+      return;
+    }
+    
+    QMessageBox::information(this, tr("提示"), 
+        tr("正在从远程服务器获取录波数据，请稍候..."));
+    
+    m_pendingPlaybackAlarmId = eventId;
+    m_remoteClient->getAlarmRecording(eventId);
+    
+  } else {
+    // 本地模式
+    AlarmRecordingData data = m_alarmManager->getRecordingData(eventId);
+    
+    if (data.data.isEmpty() && csvFilePath.isEmpty()) {
+      QMessageBox::warning(this, tr("错误"), 
+          tr("录波数据不可用。\n可能数据已被清理或程序已重启。"));
+      return;
+    }
+    
+    // 如果内存中没有数据但有CSV文件，设置文件路径
+    if (data.data.isEmpty() && !csvFilePath.isEmpty()) {
+      data.csvFilePath = csvFilePath;
+    }
+    
+    // 发射信号，请求在系统录波界面中回放
+    emit requestPlaybackInRecorder(csvFilePath, data);
+  }
+}
+
+// ==================== 远程模式数据刷新 ====================
+
+void AlarmWidget::refreshRemoteData() {
+  if (!m_isRemoteMode || !m_remoteClient) return;
+  
+  // 先清空表格，显示"加载中..."状态，避免显示旧的本地数据
+  m_activeAlarmsTable->setRowCount(0);
+  m_historyTable->setRowCount(0);
+  m_rulesTable->setRowCount(0);
+  m_recordingsTable->setRowCount(0);
+  m_statsLabel->setText(tr("正在从远程服务器加载数据..."));
+  
+  m_remoteClient->getAlarms();
+  
+  // 根据选择的天数获取历史
+  int days = 3;
+  switch (m_historyDaysCombo->currentIndex()) {
+    case 0: days = 1; break;
+    case 1: days = 3; break;
+    case 2: days = 7; break;
+    case 3: days = 30; break;
+  }
+  m_remoteClient->getAlarmHistory(days);
+  m_remoteClient->getAlarmRules();
+  m_remoteClient->getAlarmRecordings();
+}
+
+void AlarmWidget::updateActiveAlarmsTableFromJson(const QJsonArray& alarms) {
+  m_activeAlarmsTable->setSortingEnabled(false);
+  m_activeAlarmsTable->setRowCount(0);
+  
+  int criticalCount = 0, highCount = 0, mediumCount = 0, lowCount = 0;
+  
+  for (const QJsonValue& val : alarms) {
+    QJsonObject alarm = val.toObject();
+    int row = m_activeAlarmsTable->rowCount();
+    m_activeAlarmsTable->insertRow(row);
+    
+    AlarmPriority priority = static_cast<AlarmPriority>(alarm["priority"].toInt());
+    AlarmType type = static_cast<AlarmType>(alarm["type"].toInt());
+    AlarmState state = static_cast<AlarmState>(alarm["state"].toInt());
+    
+    // 统计各优先级数量
+    switch (priority) {
+      case AlarmPriority::Critical: criticalCount++; break;
+      case AlarmPriority::High: highCount++; break;
+      case AlarmPriority::Medium: mediumCount++; break;
+      case AlarmPriority::Low: lowCount++; break;
+    }
+    
+    QTableWidgetItem* priorityItem = new QTableWidgetItem(alarmPriorityToString(priority));
+    priorityItem->setData(Qt::UserRole, alarm["id"].toString());
+    priorityItem->setBackground(alarmPriorityColor(priority));
+    m_activeAlarmsTable->setItem(row, 0, priorityItem);
+    
+    m_activeAlarmsTable->setItem(row, 1, new QTableWidgetItem(alarmTypeToString(type)));
+    m_activeAlarmsTable->setItem(row, 2, new QTableWidgetItem(alarmStateToString(state)));
+    m_activeAlarmsTable->setItem(row, 3, new QTableWidgetItem(alarm["channelName"].toString()));
+    m_activeAlarmsTable->setItem(row, 4, new QTableWidgetItem(alarm["tagName"].toString()));
+    m_activeAlarmsTable->setItem(row, 5, new QTableWidgetItem(alarm["value"].toVariant().toString()));
+    m_activeAlarmsTable->setItem(row, 6, new QTableWidgetItem(alarm["message"].toString()));
+    
+    QDateTime activeTime = QDateTime::fromString(alarm["activeTime"].toString(), Qt::ISODate);
+    m_activeAlarmsTable->setItem(row, 7, new QTableWidgetItem(activeTime.toString("yyyy-MM-dd HH:mm:ss")));
+  }
+  
+  m_activeAlarmsTable->setSortingEnabled(true);
+  
+  // 更新统计
+  int total = alarms.size();
+  QString stats = tr("活动报警: %1 条 | 紧急: %2 | 高: %3 | 中: %4 | 低: %5 (远程)")
+                      .arg(total).arg(criticalCount).arg(highCount).arg(mediumCount).arg(lowCount);
+  m_statsLabel->setText(stats);
+  
+  // 根据严重程度设置颜色
+  if (criticalCount > 0) {
+    m_statsLabel->setStyleSheet(
+        "QLabel { padding: 5px; background: #ffcccc; border: 2px solid red; font-weight: bold; }");
+  } else if (highCount > 0) {
+    m_statsLabel->setStyleSheet(
+        "QLabel { padding: 5px; background: #ffe6cc; border: 2px solid orange; font-weight: bold; }");
+  } else if (total > 0) {
+    m_statsLabel->setStyleSheet(
+        "QLabel { padding: 5px; background: #ffffcc; border: 1px solid #ccc; }");
+  } else {
+    m_statsLabel->setStyleSheet(
+        "QLabel { padding: 5px; background: #ccffcc; border: 1px solid #ccc; }");
+  }
+}
+
+void AlarmWidget::updateStatisticsFromCount(int activeCount) {
+  QString stats = tr("活动报警: %1 条 (远程模式)").arg(activeCount);
+  m_statsLabel->setText(stats);
+  
+  if (activeCount > 0) {
+    m_statsLabel->setStyleSheet(
+        "QLabel { padding: 5px; background: #ffffcc; border: 1px solid #ccc; }");
+  } else {
+    m_statsLabel->setStyleSheet(
+        "QLabel { padding: 5px; background: #ccffcc; border: 1px solid #ccc; }");
+  }
+}
+
+void AlarmWidget::updateHistoryTableFromJson(const QJsonArray& alarms) {
+  m_historyTable->setRowCount(0);
+  
+  for (const QJsonValue& val : alarms) {
+    QJsonObject alarm = val.toObject();
+    int row = m_historyTable->rowCount();
+    m_historyTable->insertRow(row);
+    
+    AlarmPriority priority = static_cast<AlarmPriority>(alarm["priority"].toInt());
+    AlarmType type = static_cast<AlarmType>(alarm["type"].toInt());
+    
+    QTableWidgetItem* priorityItem = new QTableWidgetItem(alarmPriorityToString(priority));
+    priorityItem->setData(Qt::UserRole, alarm["id"].toString());
+    priorityItem->setBackground(alarmPriorityColor(priority));
+    m_historyTable->setItem(row, 0, priorityItem);
+    
+    m_historyTable->setItem(row, 1, new QTableWidgetItem(alarmTypeToString(type)));
+    m_historyTable->setItem(row, 2, new QTableWidgetItem(alarm["channelName"].toString()));
+    m_historyTable->setItem(row, 3, new QTableWidgetItem(alarm["tagName"].toString()));
+    m_historyTable->setItem(row, 4, new QTableWidgetItem(alarm["value"].toVariant().toString()));
+    m_historyTable->setItem(row, 5, new QTableWidgetItem(alarm["message"].toString()));
+    
+    QDateTime activeTime = QDateTime::fromString(alarm["activeTime"].toString(), Qt::ISODate);
+    m_historyTable->setItem(row, 6, new QTableWidgetItem(activeTime.toString("yyyy-MM-dd HH:mm:ss")));
+    
+    QString ackTimeStr = alarm["acknowledgedTime"].toString();
+    m_historyTable->setItem(row, 7, new QTableWidgetItem(
+        ackTimeStr.isEmpty() ? "-" : QDateTime::fromString(ackTimeStr, Qt::ISODate).toString("yyyy-MM-dd HH:mm:ss")));
+    
+    QString clrTimeStr = alarm["clearedTime"].toString();
+    m_historyTable->setItem(row, 8, new QTableWidgetItem(
+        clrTimeStr.isEmpty() ? "-" : QDateTime::fromString(clrTimeStr, Qt::ISODate).toString("yyyy-MM-dd HH:mm:ss")));
+    
+    m_historyTable->setItem(row, 9, new QTableWidgetItem(alarm["acknowledgedBy"].toString()));
+    
+    // 录波列
+    bool hasRecording = alarm["hasRecording"].toBool();
+    QTableWidgetItem* recordingItem = new QTableWidgetItem(hasRecording ? "📊 有录波" : "-");
+    recordingItem->setData(Qt::UserRole, alarm["recordingFilePath"].toString());
+    recordingItem->setData(Qt::UserRole + 1, hasRecording);
+    if (hasRecording) {
+        recordingItem->setForeground(QColor("#3B82F6"));
+    }
+    m_historyTable->setItem(row, 10, recordingItem);
+  }
+  
+  m_viewHistoryRecordingBtn->setEnabled(false);
+}
+
+void AlarmWidget::updateRulesTableFromJson(const QJsonArray& rules) {
+  m_rulesTable->setRowCount(0);
+  
+  AlarmPriority filterPriority = static_cast<AlarmPriority>(m_priorityFilter->currentIndex() - 1);
+  
+  for (const QJsonValue& val : rules) {
+    QJsonObject rule = val.toObject();
+    
+    AlarmPriority priority = static_cast<AlarmPriority>(rule["priority"].toInt());
+    
+    // 应用过滤
+    if (m_priorityFilter->currentIndex() > 0 && priority != filterPriority) {
+      continue;
+    }
+    
+    int row = m_rulesTable->rowCount();
+    m_rulesTable->insertRow(row);
+    
+    bool enabled = rule["enabled"].toBool();
+    AlarmType type = static_cast<AlarmType>(rule["type"].toInt());
+    
+    QTableWidgetItem* enabledItem = new QTableWidgetItem(enabled ? tr("是") : tr("否"));
+    enabledItem->setData(Qt::UserRole, rule["id"].toString());
+    enabledItem->setBackground(enabled ? QColor(200, 255, 200) : QColor(220, 220, 220));
+    m_rulesTable->setItem(row, 0, enabledItem);
+    
+    m_rulesTable->setItem(row, 1, new QTableWidgetItem(rule["name"].toString()));
+    m_rulesTable->setItem(row, 2, new QTableWidgetItem(alarmPriorityToString(priority)));
+    m_rulesTable->setItem(row, 3, new QTableWidgetItem(alarmTypeToString(type)));
+    m_rulesTable->setItem(row, 4, new QTableWidgetItem(rule["channelName"].toString()));
+    m_rulesTable->setItem(row, 5, new QTableWidgetItem(rule["tagName"].toString()));
+    
+    // 条件
+    QString condition;
+    switch (type) {
+      case AlarmType::HighLimit:
+        condition = QString("> %1").arg(rule["highLimit"].toDouble());
+        break;
+      case AlarmType::LowLimit:
+        condition = QString("< %1").arg(rule["lowLimit"].toDouble());
+        break;
+      case AlarmType::HighHighLimit:
+        condition = QString("> %1").arg(rule["highHighLimit"].toDouble());
+        break;
+      case AlarmType::LowLowLimit:
+        condition = QString("< %1").arg(rule["lowLowLimit"].toDouble());
+        break;
+      default:
+        condition = "-";
+        break;
+    }
+    m_rulesTable->setItem(row, 6, new QTableWidgetItem(condition));
+    m_rulesTable->setItem(row, 7, new QTableWidgetItem(QString::number(rule["delaySeconds"].toInt())));
+  }
+}
+
+void AlarmWidget::updateRecordingsTableFromJson(const QJsonArray& recordings) {
+  m_recordingsTable->setRowCount(0);
+  
+  for (const QJsonValue& val : recordings) {
+    QJsonObject rec = val.toObject();
+    int row = m_recordingsTable->rowCount();
+    m_recordingsTable->insertRow(row);
+    
+    QString alarmEventId = rec["alarmEventId"].toString();
+    
+    QTableWidgetItem* idItem = new QTableWidgetItem(alarmEventId.left(8) + "...");
+    idItem->setData(Qt::UserRole, alarmEventId);
+    idItem->setToolTip(alarmEventId);
+    m_recordingsTable->setItem(row, 0, idItem);
+    
+    m_recordingsTable->setItem(row, 1, new QTableWidgetItem(rec["ruleName"].toString()));
+    
+    QDateTime startTime = QDateTime::fromString(rec["startTime"].toString(), Qt::ISODate);
+    m_recordingsTable->setItem(row, 2, new QTableWidgetItem(startTime.toString("yyyy-MM-dd HH:mm:ss")));
+    
+    QString endTimeStr = rec["endTime"].toString();
+    m_recordingsTable->setItem(row, 3, new QTableWidgetItem(
+        endTimeStr.isEmpty() ? tr("录波中...") : 
+        QDateTime::fromString(endTimeStr, Qt::ISODate).toString("yyyy-MM-dd HH:mm:ss")));
+    
+    m_recordingsTable->setItem(row, 4, new QTableWidgetItem(QString::number(rec["totalDataPoints"].toInt())));
+    
+    QJsonArray tags = rec["recordedTags"].toArray();
+    m_recordingsTable->setItem(row, 5, new QTableWidgetItem(QString::number(tags.size())));
+    
+    QString csvPath = rec["csvFilePath"].toString();
+    m_recordingsTable->setItem(row, 6, new QTableWidgetItem(csvPath.isEmpty() ? tr("-") : csvPath));
+    
+    // 保存录波详细数据到缓存
+    m_remoteRecordingCache[alarmEventId] = rec;
+  }
+  
+  qInfo() << "[AlarmWidget] 更新远程录波表:" << recordings.size() << "条";
 }
 
 }  // namespace ModbusPlexLink

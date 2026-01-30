@@ -193,12 +193,28 @@ enum class RecorderState {
  * - 多Y轴支持
  * - 数据回放
  */
+namespace ModbusPlexLink {
+class ModeStatusBanner;
+class RemoteClient;
+}
+
 class WaveformRecorderWidget : public QWidget {
   Q_OBJECT
 
  public:
   explicit WaveformRecorderWidget(QWidget* parent = nullptr);
   ~WaveformRecorderWidget();
+
+  // ==================== 模式设置 ====================
+  
+  void setLocalMode();
+  void setLocalWithApiMode(quint16 httpPort, quint16 wsPort);
+  void setRemoteMode(const QString& remoteHost, bool connected);
+  void setRemoteClient(ModbusPlexLink::RemoteClient* client);
+  bool isRemoteMode() const { return m_isRemoteMode; }
+  
+  // 远程数据处理
+  void onRemoteDataReceived(const QString& channelName, const QJsonObject& data);
 
   // ==================== 数据源设置 ====================
 
@@ -328,6 +344,11 @@ class WaveformRecorderWidget : public QWidget {
    * @brief 停止回放
    */
   void stopPlayback();
+  
+  /**
+   * @brief 重置到空闲模式（清除回放数据，准备新的录波）
+   */
+  void resetToIdleMode();
 
   /**
    * @brief 暂停回放
@@ -424,11 +445,18 @@ class WaveformRecorderWidget : public QWidget {
 
  private:
   // UI 组件
+  ModbusPlexLink::ModeStatusBanner* m_modeStatusBanner;
   QToolBar* m_toolBar;
   QSplitter* m_splitter;
   QTableWidget* m_channelTable;
   QCustomPlot* m_plot;
   QStatusBar* m_statusBar;
+  
+  // 模式相关
+  bool m_isRemoteMode;
+  QString m_remoteHost;
+  ModbusPlexLink::RemoteClient* m_remoteClient;
+  QStringList m_remoteAvailableTags; // 远程模式下可用的标签缓存
 
   // 工具栏按钮
   QPushButton* m_startBtn;

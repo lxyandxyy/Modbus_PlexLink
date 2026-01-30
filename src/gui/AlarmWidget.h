@@ -8,10 +8,12 @@
 #include <QComboBox>
 #include <QLabel>
 #include "utils/AlarmManager.h"
+#include "ModeStatusBanner.h"
 
 namespace ModbusPlexLink {
 
 class ChannelManager;
+class RemoteClient;
 
 /**
  * @brief 报警管理界面
@@ -33,6 +35,13 @@ public:
 
     // 刷新显示
     void refreshDisplay();
+    
+    // 模式设置
+    void setLocalMode();
+    void setLocalWithApiMode(quint16 httpPort, quint16 wsPort);
+    void setRemoteMode(const QString& remoteHost, bool connected);
+    void setRemoteClient(RemoteClient* client);
+    bool isRemoteMode() const { return m_isRemoteMode; }
 
 signals:
     /**
@@ -41,6 +50,11 @@ signals:
      * @param recordingData 录波数据（如果内存中有的话）
      */
     void requestPlaybackInRecorder(const QString& csvFilePath, const AlarmRecordingData& recordingData);
+    
+    /**
+     * @brief 告警通知信号（用于系统通知）
+     */
+    void alarmNotification(const QString& ruleName, const QString& message, AlarmPriority priority);
 
 private slots:
     // 报警信号
@@ -71,6 +85,17 @@ private slots:
     void onExportRecording();
     void onPlaybackRecording();
     void onDeleteRecording();
+    
+    // 历史告警录波
+    void onViewHistoryRecording();
+    
+    // 远程模式数据刷新
+    void refreshRemoteData();
+    void updateActiveAlarmsTableFromJson(const QJsonArray& alarms);
+    void updateHistoryTableFromJson(const QJsonArray& alarms);
+    void updateRulesTableFromJson(const QJsonArray& rules);
+    void updateRecordingsTableFromJson(const QJsonArray& recordings);
+    void updateStatisticsFromCount(int activeCount);
 
 private:
     void setupUi();
@@ -89,8 +114,14 @@ private:
 private:
     AlarmManager* m_alarmManager;
     ChannelManager* m_channelManager;
+    RemoteClient* m_remoteClient;
+    bool m_isRemoteMode;
+    QString m_remoteHost;
+    QMap<QString, QJsonObject> m_remoteRecordingCache; // 远程录波数据缓存
+    QString m_pendingPlaybackAlarmId; // 等待回放的告警ID
 
     // UI组件
+    ModeStatusBanner* m_modeStatusBanner;
     QTabWidget* m_tabWidget;
 
     // 活动报警
@@ -105,6 +136,7 @@ private:
     QTableWidget* m_historyTable;
     QPushButton* m_refreshHistoryBtn;
     QComboBox* m_historyDaysCombo;
+    QPushButton* m_viewHistoryRecordingBtn;  // 查看历史录波按钮
 
     // 规则管理
     QTableWidget* m_rulesTable;
